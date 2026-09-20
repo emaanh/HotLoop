@@ -1,0 +1,38 @@
+[project]
+name = "hotloop-workspace"
+version = "0.0.0"
+description = "HotLoop: benchmark for autonomous agents doing real GPU performance engineering"
+requires-python = ">=3.11,<3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+hotloop-schemas = { workspace = true }
+hotloop-taskgen = { workspace = true }
+hotloop-evaluator = { workspace = true }
+hotloop-runner = { workspace = true }
+hotloop-agents = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "hotloop-schemas",
+    "hotloop-taskgen",
+    "hotloop-evaluator",
+    "hotloop-runner",
+    "hotloop-agents",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "packages"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

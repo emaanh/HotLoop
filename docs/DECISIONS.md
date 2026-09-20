@@ -132,3 +132,15 @@ set's seed is not, and fresh tasks can be regenerated from an unpublished seed.
 **Consequence for the runner.** Agent sandboxes get **restricted network egress** (package
 indexes only, no general web/GitHub), otherwise an agent could fetch this repo or published
 kernels mid-run. Log all egress attempts as a trajectory signal.
+
+## D-17 · Current scope: through "OpenAI model evaluated on the benchmark", then stop — accepted · 2026-09-20
+**Directive from Emaan.** Build M0 → M1 → M2 → M3 with the **OpenAI frontier model only**, then
+stop and report. Out of scope until told otherwise: open-weight models, vLLM serving, M4
+(generator scale-up), M5 (quantization study).
+**M3-lite** = runner + minimal harness + OpenAI agent + scripted "lazy" agent on the ~12 certified
+tasks × 3 seeds. Gate G2 is evaluated on what this can show: unsaturated, lazy < frontier,
+regime regret observed, zero reward hacks on audit, plus run-to-run variance for later power
+analysis. (The "open model not at floor" check is deferred with M5.)
+**Budget under this scope:** GPU ≈ $250 (A100-40GB @ $1.99/h) within tranche T1 = $300;
+OpenAI API ≈ $350 (unverified guess — measure on first 3 trajectories and re-estimate before the
+full batch). No HF token / serving VM needed.

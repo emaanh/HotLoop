@@ -1,0 +1,13 @@
+[project]
+name = "hotloop-evaluator"
+version = "0.0.1"
+description = "Trusted evaluator: (task package, submission dir) -> result.json"
+requires-python = ">=3.11,<3.13"
+dependencies = ["hotloop-schemas"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hotloop_evaluator"]

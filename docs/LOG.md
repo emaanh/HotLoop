@@ -32,4 +32,7 @@ Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends bel
 - Emaan will provide an OpenAI key for the frontier reference (D-15). Staging "sounds good".
 - OpenAI key added and verified (models list OK). Remaining asks: HF token (M3), permission
   allowlist OK, go-ahead to commit + start M0.
-- Next: access from Emaan → M0 can start immediately without it.
+- Repo is public and was already `origin` (I hadn't checked) → D-16: answer-key material stays in
+  gitignored `private/`; agent sandboxes get restricted egress. Initial docs commit a34d1ad (local).
+- **Scope set by Emaan (D-17): go through evaluating the OpenAI model on the benchmark, no further.**
+- M0 started: verification reads of reuse targets (subagents) + repo skeleton/schemas.

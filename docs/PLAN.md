@@ -1,17 +1,18 @@
 # Plan
 
-Status: planning complete, **no code yet**, waiting on access (ACCESS.md). Updated 2026-09-20.
+Status: **executing M0.** Scope per D-17: M0 → M3-lite (OpenAI model only), then stop and report.
+M4/M5 and open-weight models are parked. Updated 2026-09-20.
 Cost detail and levers: [BUDGET.md](BUDGET.md).
 Principle: every milestone ends in a **gate** with a number that can fail. Cheapest falsification first.
 
 | M | Goal | Needs | Est. GPU $ | Status |
 |---|---|---|---|---|
-| M0 | Verify reuse targets by reading code; repo skeleton | nothing | 0 | ⬜ can start now |
-| M1 | Trustworthy measurement | Lambda | ~$50 | ⬜ blocked on access |
+| M0 | Verify reuse targets by reading code; repo skeleton | nothing | 0 | 🟡 in progress |
+| M1 | Trustworthy measurement | Lambda | ~$50 | ⬜ next |
 | M2 | Regime flips exist (G1) | Lambda | ~$100 | ⬜ |
 | M3 | Agents on MVP tasks (G2) | + OpenAI key, HF | ~$350 + ~$350 API | ⬜ |
-| M4 | Generator scale-up (Level 2, 2nd SKU) | — | ~$300 | ⬜ |
-| M5 | Quantization study | — | ~$1,400 (levers: BUDGET.md) | ⬜ |
+| M4 | Generator scale-up (Level 2, 2nd SKU) | — | ~$300 | ⏸ parked (D-17) |
+| M5 | Quantization study | — | ~$1,400 (levers: BUDGET.md) | ⏸ parked (D-17) |
 | M6 | Write-up | — | 0 | ⬜ |
 
 ## M0 — Ground truth on the ecosystem (no GPU)

@@ -1,0 +1,578 @@
+{
+  "$defs": {
+    "CorrectnessDetail": {
+      "additionalProperties": false,
+      "properties": {
+        "failure": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure"
+        },
+        "max_abs_err": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Abs Err"
+        },
+        "max_rel_err": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Rel Err"
+        },
+        "n_trials": {
+          "title": "N Trials",
+          "type": "integer"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "passed",
+        "n_trials"
+      ],
+      "title": "CorrectnessDetail",
+      "type": "object"
+    },
+    "EntryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "baselines": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TimingStats"
+          },
+          "title": "Baselines",
+          "type": "object"
+        },
+        "best_baseline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Best Baseline"
+        },
+        "candidate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimingStats"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "correctness": {
+          "$ref": "#/$defs/CorrectnessDetail"
+        },
+        "entry": {
+          "title": "Entry",
+          "type": "string"
+        },
+        "peak_memory_bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peak Memory Bytes"
+        },
+        "speedup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RatioCI"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "weight": {
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "entry",
+        "weight",
+        "correctness"
+      ],
+      "title": "EntryResult",
+      "type": "object"
+    },
+    "EnvFingerprint": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cpu Model"
+        },
+        "cuda": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cuda"
+        },
+        "driver": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Driver"
+        },
+        "ecc": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ecc"
+        },
+        "gpu_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GpuState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gpu_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GpuState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gpu_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gpu Name"
+        },
+        "gpu_uuid": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gpu Uuid"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        },
+        "python": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Python"
+        },
+        "torch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Torch"
+        },
+        "triton": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Triton"
+        },
+        "vbios": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vbios"
+        }
+      },
+      "title": "EnvFingerprint",
+      "type": "object"
+    },
+    "Flag": {
+      "additionalProperties": false,
+      "description": "An anti-cheat or hygiene signal. `fatal` flags force status='flagged'.",
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        },
+        "fatal": {
+          "default": false,
+          "title": "Fatal",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "Flag",
+      "type": "object"
+    },
+    "GpuState": {
+      "additionalProperties": false,
+      "properties": {
+        "clocks_locked": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clocks Locked"
+        },
+        "mem_clock_mhz": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mem Clock Mhz"
+        },
+        "sm_clock_mhz": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sm Clock Mhz"
+        },
+        "temperature_c": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature C"
+        },
+        "throttle_reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Throttle Reasons",
+          "type": "array"
+        }
+      },
+      "title": "GpuState",
+      "type": "object"
+    },
+    "RatioCI": {
+      "additionalProperties": false,
+      "description": "Bootstrap CI on t_baseline / t_candidate from interleaved blocks.",
+      "properties": {
+        "hi": {
+          "title": "Hi",
+          "type": "number"
+        },
+        "level": {
+          "default": 0.95,
+          "title": "Level",
+          "type": "number"
+        },
+        "lo": {
+          "title": "Lo",
+          "type": "number"
+        },
+        "point": {
+          "title": "Point",
+          "type": "number"
+        }
+      },
+      "required": [
+        "point",
+        "lo",
+        "hi"
+      ],
+      "title": "RatioCI",
+      "type": "object"
+    },
+    "TimingStats": {
+      "additionalProperties": false,
+      "properties": {
+        "iqr_s": {
+          "title": "Iqr S",
+          "type": "number"
+        },
+        "mean_s": {
+          "title": "Mean S",
+          "type": "number"
+        },
+        "median_s": {
+          "title": "Median S",
+          "type": "number"
+        },
+        "min_s": {
+          "title": "Min S",
+          "type": "number"
+        },
+        "n": {
+          "title": "N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n",
+        "median_s",
+        "iqr_s",
+        "mean_s",
+        "min_s"
+      ],
+      "title": "TimingStats",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "build_seconds": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Build Seconds"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/EntryResult"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "env": {
+      "$ref": "#/$defs/EnvFingerprint"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "eval_seconds": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Eval Seconds"
+    },
+    "evaluator_version": {
+      "title": "Evaluator Version",
+      "type": "string"
+    },
+    "flags": {
+      "items": {
+        "$ref": "#/$defs/Flag"
+      },
+      "title": "Flags",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "score": {
+      "description": "weighted geomean speedup vs best baseline; 0 unless status=='ok'",
+      "minimum": 0,
+      "title": "Score",
+      "type": "number"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "incorrect",
+        "error",
+        "inconclusive",
+        "flagged"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "submission_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Submission Hash"
+    },
+    "task_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task Hash"
+    },
+    "task_id": {
+      "title": "Task Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "task_id",
+    "evaluator_version",
+    "status",
+    "score"
+  ],
+  "title": "Result",
+  "type": "object"
+}

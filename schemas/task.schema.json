@@ -1,0 +1,288 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "description": "Agent-side limits. Deliberately not wall-clock-primary (D-6): wall-clock couples score to\nmodel serving throughput. `wall_seconds` is a safety cap only.",
+      "properties": {
+        "gpu_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Gpu Seconds",
+          "type": "number"
+        },
+        "max_total_tokens": {
+          "exclusiveMinimum": 0,
+          "title": "Max Total Tokens",
+          "type": "integer"
+        },
+        "max_turns": {
+          "exclusiveMinimum": 0,
+          "title": "Max Turns",
+          "type": "integer"
+        },
+        "wall_seconds": {
+          "exclusiveMinimum": 0,
+          "title": "Wall Seconds",
+          "type": "number"
+        }
+      },
+      "required": [
+        "max_turns",
+        "max_total_tokens",
+        "gpu_seconds",
+        "wall_seconds"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "Hardware": {
+      "additionalProperties": false,
+      "properties": {
+        "gpu_sku": {
+          "description": "e.g. 'A100-SXM4-40GB'; the same program on another SKU is another task",
+          "title": "Gpu Sku",
+          "type": "string"
+        },
+        "image": {
+          "description": "Container image digest the task was certified under",
+          "title": "Image",
+          "type": "string"
+        },
+        "min_gpu_memory_gib": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Gpu Memory Gib"
+        }
+      },
+      "required": [
+        "gpu_sku",
+        "image"
+      ],
+      "title": "Hardware",
+      "type": "object"
+    },
+    "OutputContract": {
+      "additionalProperties": false,
+      "properties": {
+        "check_strides": {
+          "default": false,
+          "title": "Check Strides",
+          "type": "boolean"
+        },
+        "deterministic": {
+          "default": true,
+          "title": "Deterministic",
+          "type": "boolean"
+        },
+        "inputs_may_be_mutated": {
+          "default": false,
+          "title": "Inputs May Be Mutated",
+          "type": "boolean"
+        },
+        "memory_cap_bytes": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Peak allocated bytes allowed; None = unconstrained",
+          "title": "Memory Cap Bytes"
+        },
+        "n_outputs": {
+          "minimum": 1,
+          "title": "N Outputs",
+          "type": "integer"
+        },
+        "tolerances": {
+          "items": {
+            "$ref": "#/$defs/Tolerance"
+          },
+          "title": "Tolerances",
+          "type": "array"
+        }
+      },
+      "required": [
+        "n_outputs",
+        "tolerances"
+      ],
+      "title": "OutputContract",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "How the task was generated; enough to regenerate it bit-for-bit.",
+      "properties": {
+        "family": {
+          "title": "Family",
+          "type": "string"
+        },
+        "family_params": {
+          "additionalProperties": true,
+          "title": "Family Params",
+          "type": "object"
+        },
+        "generator_version": {
+          "title": "Generator Version",
+          "type": "string"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "sibling_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tasks sharing a program but straddling a certified regime boundary share a group id. Used for transfer matrices / regime regret.",
+          "title": "Sibling Group"
+        }
+      },
+      "required": [
+        "generator_version",
+        "family",
+        "seed"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "Tolerance": {
+      "additionalProperties": false,
+      "description": "Per-output closeness, calibrated at certification time from an fp64 re-run of the\nreference (EVAL.md). Applied as |cand - ref| <= atol + rtol * |ref|.",
+      "properties": {
+        "atol": {
+          "minimum": 0,
+          "title": "Atol",
+          "type": "number"
+        },
+        "equal_nan": {
+          "default": false,
+          "title": "Equal Nan",
+          "type": "boolean"
+        },
+        "rtol": {
+          "minimum": 0,
+          "title": "Rtol",
+          "type": "number"
+        }
+      },
+      "required": [
+        "rtol",
+        "atol"
+      ],
+      "title": "Tolerance",
+      "type": "object"
+    },
+    "WorkloadEntry": {
+      "additionalProperties": false,
+      "description": "One point of the workload distribution. Shapes/layout/data distribution live in\nworkload.py; this is the declarative index the evaluator iterates over.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "weight": {
+          "exclusiveMinimum": 0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "weight"
+      ],
+      "title": "WorkloadEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "baselines": {
+      "description": "Automatic baselines the evaluator measures; score is vs the fastest (D-4)",
+      "items": {
+        "type": "string"
+      },
+      "title": "Baselines",
+      "type": "array"
+    },
+    "budget": {
+      "$ref": "#/$defs/Budget"
+    },
+    "content_hash": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 over public files, filled by taskgen at emit time",
+      "title": "Content Hash"
+    },
+    "hardware": {
+      "$ref": "#/$defs/Hardware"
+    },
+    "id": {
+      "pattern": "^[a-z0-9][a-z0-9_\\-\\.]{2,95}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "outputs": {
+      "$ref": "#/$defs/OutputContract"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "workload": {
+      "items": {
+        "$ref": "#/$defs/WorkloadEntry"
+      },
+      "minItems": 1,
+      "title": "Workload",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "provenance",
+    "hardware",
+    "workload",
+    "outputs",
+    "budget"
+  ],
+  "title": "TaskSpec",
+  "type": "object"
+}
