@@ -36,3 +36,12 @@ Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends bel
   gitignored `private/`; agent sandboxes get restricted egress. Initial docs commit a34d1ad (local).
 - **Scope set by Emaan (D-17): go through evaluating the OpenAI model on the benchmark, no further.**
 - M0 started: verification reads of reuse targets (subagents) + repo skeleton/schemas.
+- **M0 verification done** (11 repos cloned and read, nothing run). ECOSYSTEM.md v1 has the
+  corrections table. Headlines: SOL-ExecBench does *not* calibrate tolerances (ours is original);
+  nobody combines secret seeds + fresh values per timed call + all-stream timing; FastKernels has
+  no agent runtime or nsys; KernelGYM has no LICENSE file; mini-swe-agent is a good dependency
+  with one timeout bug. → D-18 (harness), D-19 (timing method).
+- Code landed (all CPU-tested, 22 tests): contracts + JSON Schemas + boundary test; `stats.py`
+  (paired-block bootstrap ratio; synthetic tests show shared 30% drift cancels, 1.10× detected
+  ≥95% at CV 3%/30 pairs and CV 8%/120 pairs); `correctness.py` (contract checks + fp64 tolerance
+  calibration: accepts reordered stable softmax on unseen seeds, rejects half-precision dumping).

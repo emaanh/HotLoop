@@ -144,3 +144,32 @@ analysis. (The "open model not at floor" check is deferred with M5.)
 **Budget under this scope:** GPU ≈ $250 (A100-40GB @ $1.99/h) within tranche T1 = $300;
 OpenAI API ≈ $350 (unverified guess — measure on first 3 trajectories and re-estimate before the
 full batch). No HF token / serving VM needed.
+
+## D-18 · Agent harness: depend on mini-swe-agent 2.4.6, don't write our own loop — accepted · 2026-09-20
+**Context.** M0 code reading: ~500-line MIT core, protocol-based, injectable classes; native bash
+tool calls; Responses-API model class for OpenAI reasoning models; tenacity retries; trajectory
+keeps the full raw response + usage per step (what D-12 needs).
+**Decision.** Pin `mini-swe-agent==2.4.6`. We write: `SshDockerEnvironment`, an agent subclass
+(token + GPU-second budgets, per-command durations), a YAML config (head+tail truncation), and a
+converter to our `trajectory.jsonl`.
+**Known defects to engineer around.** Docker env timeout kills the local `docker exec` client,
+not the in-container process → wrap commands in `timeout -k 5 N bash -lc` inside the container.
+Stateless shell per command (the prompt must say so). litellm is heavy and has had bad releases →
+exact pins, lockfile.
+**Alternative rejected.** Own ~200-line loop over the OpenAI SDK: full control, but we'd re-solve
+Responses-API plumbing, retries and format-error handling for no research value.
+
+## D-19 · Evaluator timing = host wall clock + device-wide sync, block-interleaved, fresh values every call — accepted · 2026-09-20
+**Context.** M0 code reading of how others time: CUDA events on the current stream (KernelBench,
+GPU MODE; exploitable via side streams — KernelBench's own code has a TODO admitting it), CUPTI
+kernel spans (SOL-ExecBench; all streams but excludes host time), `do_bench` (Atrex default).
+Interleaving, where it exists (Atrex), is process-level ABBA.
+**Decision.** Primary metric: `perf_counter` around `run(*inputs)` + `torch.cuda.synchronize()`
+(device-wide → side-stream work is always counted; host overhead is counted, which launch-bound
+regimes need). Baseline and candidate alternate in **blocks within one session** (finer than
+Atrex's process-level ABBA) with the paired bootstrap estimator in `stats.py`. Every timed call
+gets **fresh values at a fresh address** from a pre-generated pool keyed by an HMAC of a secret
+seed; outputs of timed calls are spot-checked against the reference afterwards. CUDA-event and
+CUPTI timings are recorded as *diagnostics*; a large disagreement with wall time raises a flag.
+**Why not CUPTI as primary.** It would make launch-bound tasks unscoreable and pins us to one
+CUDA/cupti-python stack.
