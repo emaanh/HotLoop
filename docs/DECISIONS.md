@@ -182,3 +182,27 @@ operator machine only. **Cost accepted:** no on-box auto-terminate. Mitigations:
 written to a local ledger (`~/.hotloop/vm_ledger.jsonl`), `hotloop-vm reap --older-than-hours H`,
 instances are terminated at the end of each work session, and live instances are listed in
 ACCESS.md. Emaan can always check/kill at cloud.lambda.ai/instances.
+
+## D-21 · Timed region = block + late-revealed stash into driver-owned poisoned buffers, minus trusted overhead — accepted · 2026-09-20
+**Refines D-19** after running the evaluator on a real A100.
+**Hole found (by inspection, before it was exploited).** The submission shares a process with
+the worker and can rebind `torch.cuda.synchronize` to a no-op, so "done" arrives while kernels
+are queued. **Fix:** the clock stops only after outputs `[last, random j]` (indices sent *after*
+the block ran) are copied on the worker's current stream into **driver-owned, NaN-poisoned
+buffers shared once per entry**, and the driver has cloned those buffers and synchronised its own
+context. Pending work is either waited for or observed as poison → incorrect. The worker also
+calls captured-original sync functions and reports rebinding (fatal `sync_tampered` flag), but
+the score does not depend on that.
+**Measured on A100 (16 × 65 µs calls):** empty RPC 72 µs; fetching 2 outputs via fresh CUDA-IPC
+handles **341 µs**; clone+sync 55 µs → 35% overhead on a 1 ms block. Hence: no IPC handle
+creation in the timed path; input pool sized from device memory (25%) so blocks are long even
+when inputs are large and never reused; fixed round-trip cost measured on the **reference**
+worker only (a submission can't inflate it) and subtracted from both sides.
+**Result:** CI half-width 4.5% → 0.9% in 7–11 s; spurious `clock_disagreement` flags gone.
+
+## D-22 · One evaluation's CI is not the whole uncertainty: pool fresh-process evaluations — provisional · 2026-09-20
+Same solution, same box, 4 separate evaluations: 1.048, 1.067, 1.045, 1.061 (each ±0.9% CI).
+Between-process SD ≈ 1% is not visible inside a session (codegen/allocation/CPU placement differ
+per process). **Decision:** scores of record = geometric mean over ≥3 evaluations in fresh
+processes, reported with the between-run spread; minimum claimable effect 3%. **To investigate:**
+core pinning for workers; whether the variance comes from the compiled baseline or the candidate.

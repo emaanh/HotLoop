@@ -55,7 +55,20 @@ delays), W&B (results are JSONL/parquet), RunPod.
 Takeaways: single H100s are sold out (capacity risk is real); A100-40GB is cheap and available →
 primary bench SKU (D-14); multi-GPU nodes give no per-GPU discount.
 
-## 🔬 Day-1 probes (≈ $5, first Lambda A100 box; results → LOG.md)
+## What a Lambda A100 box actually is (probed 2026-09-20, `docs/data/m1/probe_box.txt`)
+
+- KVM VM, AMD EPYC 7J13, 30 vCPU, 216 GiB RAM, Ubuntu 22.04, kernel 6.8. Boot-to-SSH ≈ 3.5 min.
+- A100-SXM4-40GB, driver 570.148.08 (→ max CUDA 12.8), ECC on, persistence on.
+- ✅ `sudo nvidia-smi -lgc 1410,1410` works. Memory-clock lock unsupported on A100 (HBM; expected).
+- ⚠️ `RmProfilingAdminOnly: 1` → hardware counters need root / a privileged container, or a
+  modprobe option + reboot. Not needed yet; tracing profilers (torch.profiler, nsys) don't need it.
+- ⚠️ Host Python is 3.10 and nsys is not installed; `docker` needs sudo (user not in docker group).
+  → the benchmark must bring its own image: Python 3.12, **torch from the cu128 index**
+  (PyPI's default torch targets CUDA 13 and refuses driver 570), nsys, nvcc.
+- Working stack used for M1: torch 2.11.0+cu128, triton 3.6.0, Python 3.12 via uv.
+- API quirk: Lambda's Cloudflare front rejects urllib's default User-Agent (403 / error 1010).
+
+## 🔬 Day-1 probes (done 2026-09-20 for items 1–4; 5–6 need a second box)
 
 1. Do `sudo nvidia-smi -pm 1` and `-lgc <max>,<max>` work? (Unverified for Lambda. If refused → Crusoe.)
 2. Can we set `NVreg_RestrictProfilingToAdminUsers=0`? Do `nsys --gpu-metrics-devices` and Nsight
@@ -70,4 +83,5 @@ primary bench SKU (D-14); multi-GPU nodes give no per-GPU discount.
 
 | Date | Provider | What | $ |
 |---|---|---|---|
-| 2026-09-20 | Lambda | `hotloop-probe-1` gpu_1x_a100_sxm4 us-west-2 (id 1af1807e…), launched 23:26Z for M1 day-1 probes — **LIVE, terminate after probes** | 1.99/h, running |
+| 2026-09-20 | Lambda | `hotloop-probe-1` gpu_1x_a100_sxm4 us-west-2, 23:26Z–23:51Z (24.6 min): day-1 probes + evaluator GPU suite. **Terminated.** | 0.82 |
+| | | **Total to date** | **0.82** |

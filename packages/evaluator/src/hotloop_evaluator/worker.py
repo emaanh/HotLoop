@@ -48,11 +48,14 @@ class _SyncGuard:
         import torch
 
         self.cuda = device.startswith("cuda")
+        # Test-only: lets the GPU suite prove the driver-side defence holds with *no* worker
+        # sync at all. Read once, before any untrusted import.
+        self.disabled = os.environ.get("HOTLOOP_TEST_DISABLE_WORKER_SYNC") == "1"
         self._py = torch.cuda.synchronize
         self._c = getattr(torch._C, "_cuda_synchronize", None)
 
     def sync(self) -> None:
-        if self.cuda:
+        if self.cuda and not self.disabled:
             self._py()
             if self._c is not None:
                 self._c()
@@ -74,6 +77,7 @@ def serve(conn, device: str) -> None:
     fns: dict[str, object] = {}
     pool: list[tuple] = []
     last_outputs: list = []
+    slots: list[tuple] = []  # driver-owned result buffers, shared once per workload entry
 
     while True:
         try:
@@ -123,6 +127,31 @@ def serve(conn, device: str) -> None:
                 last_outputs = outs
                 conn.send(("ok", {"inner_s": inner, "sync_tampered": guard.tampered()}))
 
+            elif op == "set_result_slots":
+                (slots,) = args
+                conn.send(("ok", len(slots)))
+
+            elif op == "stash":
+                # Copy chosen outputs into driver-owned buffers on the *current* stream: an output
+                # must be valid for a current-stream consumer, as any PyTorch op's would be. The
+                # indices arrive only now, after the block ran, so the submission cannot know
+                # which calls get checked. No CUDA-IPC handle is created here (that costs ~350us).
+                (js,) = args
+                for slot, j in zip(slots, js, strict=False):
+                    outs = last_outputs[j]
+                    outs = (outs,) if isinstance(outs, torch.Tensor) else tuple(outs)
+                    if len(outs) != len(slot):
+                        raise ValueError(f"expected {len(slot)} outputs, got {len(outs)}")
+                    for buf, out in zip(slot, outs, strict=True):
+                        if out.shape != buf.shape or out.dtype != buf.dtype:
+                            raise ValueError(
+                                f"timed-phase output {tuple(out.shape)}/{out.dtype} does not match "
+                                f"checked-phase output {tuple(buf.shape)}/{buf.dtype}"
+                            )
+                        buf.copy_(out)
+                guard.sync()
+                conn.send(("ok", None))
+
             elif op == "fetch":
                 (js,) = args
                 conn.send(("ok", [last_outputs[j] for j in js]))
@@ -135,6 +164,10 @@ def serve(conn, device: str) -> None:
 
             elif op == "release":
                 pool, last_outputs = [], []
+                conn.send(("ok", None))
+
+            elif op == "release_slots":
+                slots = []
                 conn.send(("ok", None))
 
             elif op == "exit":

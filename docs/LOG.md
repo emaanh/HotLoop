@@ -2,6 +2,43 @@
 
 Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends belong here too.
 
+## 2026-09-20 (evening) — M1 on a real A100: G0 passes within-box
+
+Conditions: Lambda `gpu_1x_a100_sxm4` us-west-2, A100-SXM4-40GB, driver 570.148.08, KVM, EPYC 7J13
+30 vCPU. Raw data in `docs/data/m1/`. Cost $0.82 (24.6 min).
+
+**Raw timing noise** (`scripts/probe_gpu.py`, host torch 2.7.0, 45 s per class, ~2.3–2.8k blocks):
+
+| class | block CV unlocked → locked | A-vs-A ratio (all / first 30 pairs) | planted 1.10× (first 30 pairs) |
+|---|---|---|---|
+| compute (10× 4096² fp16 matmul) | 1.58% → 0.86% | 1.0000 ±0.00% / ±0.03% | 1.0995 [1.0993, 1.0996] |
+| bandwidth (10× pointwise on 64M fp16) | 0.09% → 0.08% | 1.0000 ±0.00% / ±0.05% | 1.0994 [1.0993, 1.1002] |
+| launch (1000 tiny kernels) | 0.51% → 0.47% | 1.0001 ±0.02% / ±0.17% | 1.1009 [1.0991, 1.1022] |
+
+- ~1% thermal warm-up drift on compute (31→53 °C) is visible in raw times and **cancels in the
+  paired ratio**, as designed. Clock locking halves raw compute CV; paired ratios barely need it.
+- **G0 thresholds (CV ≤ 3% device-bound, ≤ 8% launch-bound; planted 1.10× detected) are met with
+  >10× margin within one box/session.** Not yet tested: across fresh VMs (needs a second box).
+
+**Evaluator on GPU** (torch 2.11.0+cu128, triton 3.6.0, clocks locked), toy task
+`sum(relu(x*a+b)^2,-1)` on 4096², 3 consecutive suite runs, all 6 tests green each time:
+
+| submission | verdict | speedup vs best baseline (`compile_default`) |
+|---|---|---|
+| fused Triton kernel | ok | 1.067 / 1.045 / 1.061 (each ±0.9%); **16× vs eager** |
+| same, work on a side stream (CUDA-L1 exploit) | ok, no gain | 0.84 / 0.86 / 0.88 |
+| rebinds `torch.cuda.synchronize` to no-op | **flagged**, score 0 | — |
+| copy of the eager reference | ok | 0.123–0.128 |
+| honest kernel, worker sync disabled entirely | **incorrect** (poison observed) | — |
+
+- The D-4 point in one line: a kernel that is 16× faster than eager is 1.05× vs the compiler.
+- First attempt had ±4.5% CIs: fresh-values-per-call capped blocks at 16 calls ≈ 1 ms while
+  CUDA-IPC handle creation for fetched outputs cost 341 µs/block. Redesign → D-21 → ±0.9%.
+- Found and closed a real hole by inspection (no-op synchronize) → D-21.
+- Between-process spread (~1% SD) exceeds the within-run CI → D-22.
+- Surprises: PyPI torch now targets CUDA 13 and rejects driver 570 → cu128 index. Lambda's API
+  403s urllib's default User-Agent. Boxes ship Python 3.10, no nsys.
+
 ## 2026-09-20 — Kickoff, planning only
 
 - Repo empty; local machine has uv/docker/gh, no GPU tooling or API keys (ACCESS.md).

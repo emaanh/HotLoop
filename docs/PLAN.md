@@ -8,7 +8,7 @@ Principle: every milestone ends in a **gate** with a number that can fail. Cheap
 | M | Goal | Needs | Est. GPU $ | Status |
 |---|---|---|---|---|
 | M0 | Verify reuse targets by reading code; repo skeleton | nothing | 0 | ✅ done 2026-09-20 |
-| M1 | Trustworthy measurement | Lambda | ~$50 | 🟡 in progress (stats + correctness done on CPU; timing harness, anti-cheat suite, GPU probes next) |
+| M1 | Trustworthy measurement | Lambda | ~$50 (spent $0.82) | 🟢 G0 passed within-box 2026-09-20; cross-box retest rides along with M2 |
 | M2 | Regime flips exist (G1) | Lambda | ~$100 | ⬜ |
 | M3 | Agents on MVP tasks (G2) | + OpenAI key, HF | ~$350 + ~$350 API | ⬜ |
 | M4 | Generator scale-up (Level 2, 2nd SKU) | — | ~$300 | ⏸ parked (D-17) |

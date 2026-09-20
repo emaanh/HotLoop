@@ -1,0 +1,62 @@
+
+=== identity ===
+6.8.0-60-generic
+Ubuntu 22.04.5 LTS
+30
+Mem:             216           0         213           0           1         213
+Model name:                           AMD EPYC 7J13 64-Core Processor
+Socket(s):                            30
+Hypervisor vendor:                    KVM
+NUMA node(s):                         1
+
+=== gpu ===
+name, uuid, driver_version, vbios_version, memory.total [MiB], pstate, persistence_mode, ecc.mode.current, clocks.current.sm [MHz], clocks.max.sm [MHz], clocks.max.memory [MHz]
+NVIDIA A100-SXM4-40GB, GPU-e425dc9e-9574-46fa-5d9e-3d70462dc0e5, 570.148.08, 92.00.45.00.03, 40960 MiB, P0, Enabled, Enabled, 210 MHz, 1410 MHz, 1215 MHz
+	[4mGPU0	NIC0	CPU Affinity	NUMA Affinity	GPU NUMA ID[0m
+GPU0	 X 	PHB	0-29	0		N/A
+NIC0	PHB	 X 				
+
+Legend:
+
+  X    = Self
+  SYS  = Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
+
+=== profiling restriction ===
+param not found
+
+=== tools ===
+nvcc               /usr/bin/nvcc
+nsys               MISSING
+ncu                MISSING
+nv-nsight-cu-cli   MISSING
+docker             /usr/bin/docker
+python3            /usr/bin/python3
+pip3               /usr/bin/pip3
+gcc                /usr/bin/gcc
+Cuda compilation tools, release 12.8, V12.8.93
+Build cuda_12.8.r12.8/compiler.35583870_0
+torch 2.7.0 triton 3.3.0 cuda 12.8
+
+Run 'docker run --help' for more information
+
+=== persistence mode ===
+Persistence mode is already Enabled for GPU 00000000:06:00.0.
+All done.
+exit=0
+
+=== lock gpu clocks ===
+GPU clocks set to "(gpuClkMin 1410, gpuClkMax 1410)" for GPU 00000000:06:00.0
+All done.
+exit=0 (requested 1410)
+
+=== lock mem clocks ===
+Setting locked Memory clocks is not supported for GPU 00000000:06:00.0.
+All done.
+exit=0 (requested 1215)
+
+=== reset clocks ===
+All done.
+Setting locked Memory clocks is not supported for GPU 00000000:06:00.0.
+Treating as warning and moving on.
+All done.
+done

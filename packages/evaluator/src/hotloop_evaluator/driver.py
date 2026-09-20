@@ -8,11 +8,13 @@ Trust model (EVAL.md, D-19)
   * Time that counts is measured *here*, around a batched RPC ("run these k calls, synchronise
     the device, say done"), so nothing the submission patches in its own process can touch it.
     k is sized so RPC overhead is negligible. Worker-side time is kept as a tamper diagnostic.
-  * The clock does not stop at "done". It stops after the driver has itself fetched and copied
-    the block's *last* output plus a random one. A submission that neuters synchronisation in
-    its own process gains nothing: work still queued is either waited for inside the timed
-    region (the copy queues behind it) or not finished when copied, which fails the check.
-    The same consumption is applied to the baseline, so the overhead is symmetric.
+  * The clock does not stop at "done". It stops after the block's *last* output plus a random
+    one (indices revealed only after the block ran) have been copied into driver-owned buffers
+    and the driver has cloned those buffers itself. A submission that neuters synchronisation
+    in its own process gains nothing: work still queued is either waited for inside the timed
+    region or not finished when copied, which fails the check against NaN-poisoned buffers.
+    The same consumption is applied to the baseline. The fixed cost of this round trip is
+    measured on the *trusted* reference worker only and subtracted from both sides.
   * Baseline and candidate alternate block-by-block on identical inputs (order flipped each
     pair); stats.paired_ratio turns the pairs into a speedup with a CI.
   * One randomly chosen output of *every* timed candidate block is checked against the eager
@@ -63,9 +65,11 @@ from hotloop_schemas import (
 class EvalConfig:
     device: str = "cuda"
     correctness_trials: int = 5
-    target_block_s: float = 0.05
-    max_calls_per_block: int = 256
-    pool_bytes: int = 1 << 30
+    target_block_s: float = 0.1
+    max_calls_per_block: int = 4096
+    # Inputs are never reused within a block (fresh values every call), so the pool bounds block
+    # length. None -> 25% of device memory on CUDA, 1 GiB otherwise.
+    pool_bytes: int | None = None
     baseline_probe_blocks: int = 5
     stopping: StoppingRule = field(default_factory=StoppingRule)
     inconclusive_rel_halfwidth: float = 0.05
@@ -101,19 +105,23 @@ class Worker:
             raise WorkerError(f"{self.name}: {msg[0]} failed\n{payload}")
         return payload
 
-    def timed_block(self, fn_name: str, indices: list[int], timeout: float, take: list[int]):
+    def timed_block(self, fn_name: str, indices: list[int], timeout: float, take: list[int], slots):
         """Run a block and consume outputs `take` inside the timed region.
 
         -> (driver-side seconds, worker-reported seconds, sync_tampered, copies of taken outputs)
         """
+        for slot in slots:
+            for buf in slot:
+                _poison(buf)
+        if self.device.startswith("cuda"):
+            torch.cuda.synchronize()
         t0 = time.perf_counter()
         info = self.call("run_block", fn_name, indices, timeout=timeout)
-        fetched = self.call("fetch", take, timeout=timeout)
-        taken = [_clone(o) for o in fetched]
+        self.call("stash", take, timeout=timeout)
+        taken = [_clone(slot) for slot in slots[: len(take)]]
         if self.device.startswith("cuda"):
             torch.cuda.synchronize()
         outer = time.perf_counter() - t0
-        del fetched
         return outer, info["inner_s"], info["sync_tampered"], taken
 
     def kill(self):
@@ -142,6 +150,23 @@ def _load_workload(task_dir: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.make_inputs
+
+
+def _poison(buf: torch.Tensor) -> None:
+    """Fill a result buffer with a value no correct output has, so a copy that never happened
+    (or has not happened yet) cannot pass the check."""
+    if buf.is_floating_point() or buf.is_complex():
+        buf.fill_(float("nan"))
+    elif buf.dtype == torch.bool:
+        buf.fill_(False)
+    else:
+        buf.fill_(torch.iinfo(buf.dtype).min)
+
+
+def _default_pool_bytes(device: str) -> int:
+    if device.startswith("cuda"):
+        return int(torch.cuda.get_device_properties(0).total_memory * 0.25)
+    return 1 << 30
 
 
 def _clone(out):
@@ -250,9 +275,25 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
                 for _ in range(3):
                     w.call("run_block", n, [0], timeout=cfg.load_timeout_s)
 
-        def per_call(worker, fn, n_blocks):
+        # Driver-owned result buffers, shaped like this entry's (already verified) outputs and
+        # shared with both workers once: nothing IPC-related is created inside a timed region.
+        shaped = run_once(ref, "eager", probe)
+        shaped = (shaped,) if isinstance(shaped, torch.Tensor) else tuple(shaped)
+        slots = [tuple(torch.empty_like(o) for o in shaped) for _ in range(2)]
+        del shaped
+        for w in (ref, cand):
+            w.call("set_pool", [probe], timeout=60)
+            w.call("set_result_slots", slots, timeout=60)
+
+        # Fixed cost of the timed round trip, measured on trusted code only, so a submission
+        # cannot inflate the amount that gets subtracted from its own time.
+        overhead = summarize(
+            [ref.timed_block("eager", [], cfg.call_timeout_s, [], slots)[0] for _ in range(30)]
+        )["median_s"]
+
+        def per_call(worker, fn, n_blocks, slots=slots, overhead=overhead):
             return [
-                worker.timed_block(fn, [0], cfg.call_timeout_s, take=[0])[0]
+                max(worker.timed_block(fn, [0], cfg.call_timeout_s, [0], slots)[0] - overhead, 1e-9)
                 for _ in range(n_blocks)
             ]
 
@@ -266,7 +307,10 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
             er.baselines[best].median_s, summarize(per_call(cand, "candidate", 3))["median_s"]
         )
         k = max(1, min(cfg.max_calls_per_block, math.ceil(cfg.target_block_s / max(t_call, 1e-7))))
-        k = max(1, min(k, cfg.pool_bytes // set_bytes))
+        pool_bytes = (
+            cfg.pool_bytes if cfg.pool_bytes is not None else _default_pool_bytes(cfg.device)
+        )
+        k = max(1, min(k, pool_bytes // set_bytes))
         ref.call("peak_memory", timeout=60)
         cand.call("peak_memory", timeout=60)
 
@@ -291,9 +335,9 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
             times, got = {}, {}
             for w, fn in order:
                 outer, inner, tampered, taken = w.timed_block(
-                    fn, list(range(k)), cfg.call_timeout_s, take
+                    fn, list(range(k)), cfg.call_timeout_s, take, slots
                 )
-                times[fn] = (outer, inner)
+                times[fn] = (max(outer - overhead, 1e-9), inner)
                 if fn == "candidate":
                     got = dict(zip(take, taken, strict=True))
                     if tampered and not any(f.code == "sync_tampered" for f in result.flags):
@@ -316,7 +360,8 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
                 return
             spot = Comparison(True)
             for idx in take:
-                spot = compare_outputs(got[idx], run_once(ref, "eager", pool[idx]), spec.outputs)
+                taken_out = got[idx] if len(got[idx]) > 1 else got[idx][0]
+                spot = compare_outputs(taken_out, run_once(ref, "eager", pool[idx]), spec.outputs)
                 if not spot.passed:
                     break
             del got
@@ -348,6 +393,8 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
                     f"driver observed {c_outer_total:.4g}s",
                 )
             )
+        for w in (ref, cand):
+            w.call("release_slots", timeout=60)
         er.candidate = TimingStats(**summarize(c_calls))
         er.baselines[best] = TimingStats(**summarize(b_blocks))
         er.speedup = RatioCI(point=ratio.point, lo=ratio.lo, hi=ratio.hi, level=ratio.level)

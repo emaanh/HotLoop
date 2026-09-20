@@ -1,7 +1,8 @@
 # Evaluation: correctness, timing, anti-cheat
 
-Status: v0 draft (2026-09-20). To be revised after ecosystem survey (reuse timing utilities where
-they are already good — see ECOSYSTEM.md).
+Status: **v1 (2026-09-20) — implemented in `packages/evaluator` and exercised on an A100.** Where this
+doc and the code disagree, the code + D-19/D-21/D-22 win. Test suites: `tests/test_anticheat.py`
+(CPU, end-to-end) and `tests/test_gpu.py` (CUDA).
 
 ## Contract
 
@@ -47,6 +48,28 @@ budgeted, not scored.
 - Baselines are re-measured in every evaluation session, never cached across boxes.
 - Peak memory is recorded; tasks may declare a memory cap (e.g. ≤ reference peak) so "trade
   unlimited memory for speed" is an explicit, per-task choice.
+
+## As implemented (D-19, D-21, D-22)
+
+- Three processes: trusted **driver** (owns seeds, inputs, clock, verdict; never imports the
+  submission), **reference worker** (reference + automatic baselines), **candidate worker**
+  (submission). Workers are function servers fed shared tensors; separate processes = separate
+  allocators.
+- Per evaluation a fresh secret base seed, HMAC-expanded per (entry, phase, index); published in
+  `result.json` afterwards.
+- Timed unit = a **block** of k calls on k never-reused input sets (pool sized to 25% of device
+  memory), baseline and candidate alternating on the *same* pool with order flipped each pair.
+  Clock = driver `perf_counter` around: run block → stash outputs `[k-1, random j]` (indices
+  revealed after the block) into driver-owned NaN-poisoned buffers → driver clones + syncs.
+  Fixed round-trip cost is measured on the reference worker and subtracted.
+- Every pair's stashed outputs are compared to the eager reference; any mismatch →
+  `incorrect` + fatal `timed_phase_mismatch`.
+- Speedup = geometric median of pair ratios with bootstrap CI; adaptive stop at ±1% or 200 pairs;
+  `inconclusive` if it exhausts above ±5%.
+- Score of record = geomean over ≥3 fresh-process evaluations (D-22).
+- Not yet implemented from the list above: allocator poisoning between runs (moot: separate
+  processes), boundary/hostile input classes (taskgen's job, M2), container hardening flags and
+  egress policy (runner, M3), process-tree/GPU-process audit, static pre-scan.
 
 ## Anti-cheat battery (evaluator's own test suite)
 
