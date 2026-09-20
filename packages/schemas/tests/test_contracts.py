@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
+
 from hotloop_schemas import (
     PUBLIC_FILES,
     Result,
@@ -11,7 +13,6 @@ from hotloop_schemas import (
     load_task_spec,
     public_content_hash,
 )
-from pydantic import ValidationError
 
 TASK_TOML = """
 schema_version = 1

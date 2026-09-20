@@ -36,3 +36,6 @@ addopts = "-q"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint.isort]
+known-first-party = ["hotloop_schemas", "hotloop_taskgen", "hotloop_evaluator", "hotloop_runner", "hotloop_agents"]
