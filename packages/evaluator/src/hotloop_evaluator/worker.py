@@ -35,17 +35,42 @@ def _import_from(path: Path, name: str):
     return module
 
 
-def _sync(device: str) -> None:
-    import torch
+class _SyncGuard:
+    """Holds the real device-synchronise entry points, captured before any untrusted import.
 
-    if device.startswith("cuda"):
-        torch.cuda.synchronize()
+    Untrusted code shares this process and can rebind `torch.cuda.synchronize` to a no-op so the
+    worker says "done" while kernels are still queued. We call the captured originals, and report
+    if the public names no longer point at them. This is defence in depth: the driver does not
+    rely on it (it consumes an output inside the timed region, see driver.py).
+    """
+
+    def __init__(self, device: str):
+        import torch
+
+        self.cuda = device.startswith("cuda")
+        self._py = torch.cuda.synchronize
+        self._c = getattr(torch._C, "_cuda_synchronize", None)
+
+    def sync(self) -> None:
+        if self.cuda:
+            self._py()
+            if self._c is not None:
+                self._c()
+
+    def tampered(self) -> bool:
+        import torch
+
+        return self.cuda and (
+            torch.cuda.synchronize is not self._py
+            or getattr(torch._C, "_cuda_synchronize", None) is not self._c
+        )
 
 
 def serve(conn, device: str) -> None:
     """Message loop. Every request gets exactly one reply: ("ok", payload) | ("err", text)."""
     import torch
 
+    guard = _SyncGuard(device)
     fns: dict[str, object] = {}
     pool: list[tuple] = []
     last_outputs: list = []
@@ -89,19 +114,18 @@ def serve(conn, device: str) -> None:
                 name, indices = args
                 fn = fns[name]
                 outs = []
-                _sync(device)
+                guard.sync()
                 t0 = time.perf_counter()
                 for i in indices:
                     outs.append(fn(*pool[i]))
-                _sync(device)
+                guard.sync()
                 inner = time.perf_counter() - t0
                 last_outputs = outs
-                # Reply carries no tensors: pickling IPC handles must not sit in the timed path.
-                conn.send(("ok", inner))
+                conn.send(("ok", {"inner_s": inner, "sync_tampered": guard.tampered()}))
 
             elif op == "fetch":
-                (j,) = args
-                conn.send(("ok", last_outputs[j]))
+                (js,) = args
+                conn.send(("ok", [last_outputs[j] for j in js]))
 
             elif op == "peak_memory":
                 peak = torch.cuda.max_memory_allocated() if device.startswith("cuda") else 0

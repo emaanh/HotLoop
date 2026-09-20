@@ -23,7 +23,9 @@ def smi(q):
     try:
         return subprocess.run(
             ["nvidia-smi", f"--query-gpu={q}", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         ).stdout.strip()
     except Exception as e:  # noqa: BLE001
         return f"ERR {e}"
@@ -35,8 +37,13 @@ def paired_ratio(b, c, n_boot=4000, seed=0):
     boots = np.median(logr[rng.integers(0, logr.size, (n_boot, logr.size))], axis=1)
     lo, hi = np.quantile(boots, [0.025, 0.975])
     point = float(np.exp(np.median(logr)))
-    return {"point": point, "lo": float(np.exp(lo)), "hi": float(np.exp(hi)),
-            "rel_halfwidth": float((np.exp(hi) - np.exp(lo)) / (2 * point)), "n_pairs": int(logr.size)}
+    return {
+        "point": point,
+        "lo": float(np.exp(lo)),
+        "hi": float(np.exp(hi)),
+        "rel_halfwidth": float((np.exp(hi) - np.exp(lo)) / (2 * point)),
+        "n_pairs": int(logr.size),
+    }
 
 
 def make_workloads(dev):
@@ -62,7 +69,11 @@ def make_workloads(dev):
             t = t + tiny[i & 7]
         return t
 
-    return {"compute": (compute, 10, 11), "bandwidth": (bandwidth, 10, 11), "launch": (launch, 1000, 1100)}
+    return {
+        "compute": (compute, 10, 11),
+        "bandwidth": (bandwidth, 10, 11),
+        "launch": (launch, 1000, 1100),
+    }
 
 
 def timed(fn, reps):
@@ -81,9 +92,11 @@ def study(fn, base_reps, planted_reps, seconds):
     i = 0
     while time.perf_counter() < t_end:
         order = [("a", base_reps), ("a2", base_reps), ("p", planted_reps)]
-        order = order[i % 3:] + order[: i % 3]  # rotate order so position effects cancel
+        order = order[i % 3 :] + order[: i % 3]  # rotate order so position effects cancel
         got = {name: timed(fn, reps) for name, reps in order}
-        a_blocks.append(got["a"]); a2_blocks.append(got["a2"]); p_blocks.append(got["p"])
+        a_blocks.append(got["a"])
+        a2_blocks.append(got["a2"])
+        p_blocks.append(got["p"])
         i += 1
     a = np.asarray(a_blocks)
     thirds = np.array_split(a, 3)
@@ -108,12 +121,25 @@ if __name__ == "__main__":
     dev = "cuda"
     out = {
         "tag": args.tag,
-        "gpu": smi("name,uuid,driver_version,vbios_version,pstate,clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,clocks_throttle_reasons.active,power.draw"),
-        "torch": torch.__version__, "cuda": torch.version.cuda, "python": platform.python_version(),
-        "cpu": next((l.split(":", 1)[1].strip() for l in open("/proc/cpuinfo") if l.startswith("model name")), None),
+        "gpu": smi(
+            "name,uuid,driver_version,vbios_version,pstate,clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,clocks_throttle_reasons.active,power.draw"
+        ),
+        "torch": torch.__version__,
+        "cuda": torch.version.cuda,
+        "python": platform.python_version(),
+        "cpu": next(
+            (
+                l.split(":", 1)[1].strip()
+                for l in open("/proc/cpuinfo")
+                if l.startswith("model name")
+            ),
+            None,
+        ),
         "results": {},
     }
     for name, (fn, base, planted) in make_workloads(dev).items():
         out["results"][name] = study(fn, base, planted, args.seconds)
-        out["results"][name]["temp_after"] = smi("temperature.gpu,clocks.sm,clocks_throttle_reasons.active")
+        out["results"][name]["temp_after"] = smi(
+            "temperature.gpu,clocks.sm,clocks_throttle_reasons.active"
+        )
     print(json.dumps(out, indent=2))

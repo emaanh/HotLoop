@@ -8,6 +8,11 @@ Trust model (EVAL.md, D-19)
   * Time that counts is measured *here*, around a batched RPC ("run these k calls, synchronise
     the device, say done"), so nothing the submission patches in its own process can touch it.
     k is sized so RPC overhead is negligible. Worker-side time is kept as a tamper diagnostic.
+  * The clock does not stop at "done". It stops after the driver has itself fetched and copied
+    the block's *last* output plus a random one. A submission that neuters synchronisation in
+    its own process gains nothing: work still queued is either waited for inside the timed
+    region (the copy queues behind it) or not finished when copied, which fails the check.
+    The same consumption is applied to the baseline, so the overhead is symmetric.
   * Baseline and candidate alternate block-by-block on identical inputs (order flipped each
     pair); stats.paired_ratio turns the pairs into a speedup with a CI.
   * One randomly chosen output of *every* timed candidate block is checked against the eager
@@ -77,6 +82,7 @@ class WorkerError(RuntimeError):
 class Worker:
     def __init__(self, ctx, device: str, name: str):
         self.name = name
+        self.device = device
         self.conn, child = ctx.Pipe()
         self.proc = ctx.Process(target=serve, args=(child, device), daemon=True, name=name)
         self.proc.start()
@@ -95,11 +101,20 @@ class Worker:
             raise WorkerError(f"{self.name}: {msg[0]} failed\n{payload}")
         return payload
 
-    def timed_block(self, fn_name: str, indices: list[int], timeout: float) -> tuple[float, float]:
-        """-> (driver-side seconds, worker-reported seconds) for the whole block."""
+    def timed_block(self, fn_name: str, indices: list[int], timeout: float, take: list[int]):
+        """Run a block and consume outputs `take` inside the timed region.
+
+        -> (driver-side seconds, worker-reported seconds, sync_tampered, copies of taken outputs)
+        """
         t0 = time.perf_counter()
-        inner = self.call("run_block", fn_name, indices, timeout=timeout)
-        return time.perf_counter() - t0, inner
+        info = self.call("run_block", fn_name, indices, timeout=timeout)
+        fetched = self.call("fetch", take, timeout=timeout)
+        taken = [_clone(o) for o in fetched]
+        if self.device.startswith("cuda"):
+            torch.cuda.synchronize()
+        outer = time.perf_counter() - t0
+        del fetched
+        return outer, info["inner_s"], info["sync_tampered"], taken
 
     def kill(self):
         if self.proc.is_alive():
@@ -127,6 +142,14 @@ def _load_workload(task_dir: Path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.make_inputs
+
+
+def _clone(out):
+    if isinstance(out, torch.Tensor):
+        return out.clone()
+    if isinstance(out, (tuple, list)):
+        return tuple(_clone(o) for o in out)
+    return out
 
 
 def _nbytes(inputs) -> int:
@@ -191,7 +214,7 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
     def run_once(worker: Worker, fn: str, inputs, timeout=cfg.call_timeout_s):
         worker.call("set_pool", [inputs], timeout=60)
         worker.call("run_block", fn, [0], timeout=timeout)
-        return worker.call("fetch", 0, timeout=60)
+        return _clone(worker.call("fetch", [0], timeout=60)[0])
 
     def check(inputs) -> Comparison:
         snap = snapshot_inputs(inputs)
@@ -227,9 +250,10 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
                 for _ in range(3):
                     w.call("run_block", n, [0], timeout=cfg.load_timeout_s)
 
-        def per_call(worker, fn, n_blocks, k=1):
+        def per_call(worker, fn, n_blocks):
             return [
-                worker.timed_block(fn, [0] * k, cfg.call_timeout_s)[0] / k for _ in range(n_blocks)
+                worker.timed_block(fn, [0], cfg.call_timeout_s, take=[0])[0]
+                for _ in range(n_blocks)
             ]
 
         baseline_names = [v for v in variants if v in spec.baselines] or ["eager"]
@@ -263,11 +287,24 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
             order = [(ref, best), (cand, "candidate")]
             if n_pairs % 2:
                 order.reverse()
-            times = {}
+            take = sorted({k - 1, j})
+            times, got = {}, {}
             for w, fn in order:
-                outer, inner = w.timed_block(fn, list(range(k)), cfg.call_timeout_s)
+                outer, inner, tampered, taken = w.timed_block(
+                    fn, list(range(k)), cfg.call_timeout_s, take
+                )
                 times[fn] = (outer, inner)
-            got = cand.call("fetch", j, timeout=60)
+                if fn == "candidate":
+                    got = dict(zip(take, taken, strict=True))
+                    if tampered and not any(f.code == "sync_tampered" for f in result.flags):
+                        result.flags.append(
+                            Flag(
+                                code="sync_tampered",
+                                detail="device synchronise rebound",
+                                fatal=True,
+                            )
+                        )
+                del taken
             c_outer, c_inner = times["candidate"]
             c_outer_total += c_outer
             c_inner_total += c_inner if math.isfinite(c_inner) and c_inner > 0 else 0.0
@@ -277,7 +314,11 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
                 )
                 result.status = "incorrect"
                 return
-            spot = compare_outputs(got, run_once(ref, "eager", pool[j]), spec.outputs)
+            spot = Comparison(True)
+            for idx in take:
+                spot = compare_outputs(got[idx], run_once(ref, "eager", pool[idx]), spec.outputs)
+                if not spot.passed:
+                    break
             del got
             if not spot.passed:
                 spot.failure = f"timed-phase output wrong: {spot.failure}"

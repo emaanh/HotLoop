@@ -70,4 +70,4 @@ primary bench SKU (D-14); multi-GPU nodes give no per-GPU discount.
 
 | Date | Provider | What | $ |
 |---|---|---|---|
-| — | — | nothing spent yet | 0 |
+| 2026-09-20 | Lambda | `hotloop-probe-1` gpu_1x_a100_sxm4 us-west-2 (id 1af1807e…), launched 23:26Z for M1 day-1 probes — **LIVE, terminate after probes** | 1.99/h, running |
