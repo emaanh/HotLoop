@@ -5,6 +5,9 @@ description = "Trusted evaluator: (task package, submission dir) -> result.json"
 requires-python = ">=3.11,<3.13"
 dependencies = ["hotloop-schemas", "numpy>=1.26", "torch>=2.5"]
 
+[project.scripts]
+hotloop-eval = "hotloop_evaluator.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

@@ -43,14 +43,14 @@ profiler-signature checks).
 Things we should *not* claim as novel: multi-shape eval, roofline scoring, torch.compile baseline,
 anti-cheat, production-trace shapes. Those are solved; we adopt them.
 
-## Reuse decisions (→ D-7)
+## Reuse decisions (→ D-7; superseded in detail by "Final reuse list" below)
 
 | Need | Decision |
 |---|---|
 | Task package layout | Atrex-style dir (`reference.py`, `input.py`→our `workload.py`, hidden metadata/roofline). Add KernelBench-compatible export later for comparability. |
 | Timing | Own thin implementation following GPU MODE `eval.py` design (adaptive repeats, secret seeds, recheck after timed runs) + Atrex ABBA + clock locking. `triton.testing.do_bench` as primitive where adequate. |
 | Anti-cheat | Union of known exploit catalogues (CUDA-L1, Kevin, Sakana, SOL-ExecBench, KernelGYM kernel-share) as a *regression test suite*; see EVAL.md. |
-| Tolerances | SOL-ExecBench-style calibration by probing the reference (matches our fp64 idea). |
+| Tolerances | Our own fp64 calibration of the reference's rounding error (`correctness.py`). ~~SOL-ExecBench-style~~ — M0 found SOL-ExecBench has no such calibration. |
 | Edge inputs | BackendBench/OpInfo where ops overlap. |
 | Roofline lower bound | Try SOLAR (licence check); else simple analytic counter over the FX graph. |
 | Execution backend | **Don't** adopt KernelGYM's FastAPI+Redis for MVP — one sandbox per trajectory from a cloud sandbox API is simpler. Revisit if we do RL-scale throughput. |

@@ -504,6 +504,19 @@
       "default": null,
       "title": "Eval Seconds"
     },
+    "eval_seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Secret base seed drawn for this evaluation; published after the fact so the run is reproducible",
+      "title": "Eval Seed"
+    },
     "evaluator_version": {
       "title": "Evaluator Version",
       "type": "string"

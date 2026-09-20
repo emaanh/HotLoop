@@ -107,6 +107,11 @@ class Result(_Strict):
     entries: list[EntryResult] = Field(default_factory=list)
     flags: list[Flag] = Field(default_factory=list)
     env: EnvFingerprint = Field(default_factory=EnvFingerprint)
+    eval_seed: int | None = Field(
+        default=None,
+        description="Secret base seed drawn for this evaluation; published after the fact so "
+        "the run is reproducible",
+    )
     build_seconds: float | None = None
     eval_seconds: float | None = None
     error: str | None = None
