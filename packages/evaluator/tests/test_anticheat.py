@@ -12,16 +12,17 @@ from fixtures.toy import write_submission, write_task
 from hotloop_evaluator.driver import EvalConfig, evaluate
 from hotloop_evaluator.stats import StoppingRule
 
-FAST = dict(
-    device="cpu",
-    correctness_trials=3,
-    target_block_s=0.02,
-    baseline_probe_blocks=3,
-    stopping=StoppingRule(target_rel_halfwidth=0.2, min_pairs=6, max_pairs=10),
-    inconclusive_rel_halfwidth=10.0,  # CPU CI is noisy; this suite is about verdicts, not precision
-    load_timeout_s=120,
-    call_timeout_s=20,
-)
+FAST = {
+    "device": "cpu",
+    "correctness_trials": 3,
+    "target_block_s": 0.02,
+    "baseline_probe_blocks": 3,
+    "stopping": StoppingRule(target_rel_halfwidth=0.2, min_pairs=6, max_pairs=10),
+    # CPU timing is noisy; this suite is about verdicts, not precision
+    "inconclusive_rel_halfwidth": 10.0,
+    "load_timeout_s": 120,
+    "call_timeout_s": 20,
+}
 
 
 @pytest.fixture(scope="module")
@@ -43,9 +44,8 @@ def test_honest_solution_scores(task, tmp_path):
 
 
 def test_fresh_secret_seed_each_evaluation(task, tmp_path):
-    a, b = run(task, tmp_path / "a" if False else tmp_path, "honest"), None
-    sub = tmp_path / "sub_honest"
-    b = evaluate(task, sub, EvalConfig(**FAST))
+    a = run(task, tmp_path, "honest")
+    b = evaluate(task, tmp_path / "sub_honest", EvalConfig(**FAST))
     assert a.eval_seed != b.eval_seed
 
 
