@@ -1,0 +1,134 @@
+# Decision log
+
+Append-only. Supersede, don't rewrite. Status: `accepted` | `provisional` (expected to be revisited
+with data) | `superseded by D-n`.
+
+---
+
+## D-1 · Core claim is "regime-flip tasks", not "more kernel tasks" — accepted · 2026-09-20
+**Context.** Ecosystem already has fixed-task kernel benchmarks, multi-shape eval, roofline scoring,
+anti-cheat (ECOSYSTEM.md). None generate tasks; none make the workload change the *right answer*.
+**Decision.** The research contribution is a generator + certification procedure for tasks whose
+optimal strategy flips across workload parameters, and transfer-matrix scoring built on it.
+**Why.** It's the only formulation here that (a) is novel, (b) is falsifiable cheaply before any
+agent runs, (c) yields a behavioural measure of feedback use that the quant study needs.
+**Kill criterion.** If certified cross-regime penalties are < 1.25× for most families on real
+hardware (gate G1), the premise is wrong → pivot to hardware-flip or composition-only tasks.
+
+## D-2 · Free-form agent, single deliverable — accepted · 2026-09-20
+Agent gets shell + GPU + profilers + `hotloop check`; deliverable is a dir with
+`solution.py: run(*inputs)`. Any backend. No prescribed tools/workflow (contrast TritonGym's fixed
+tool API, Apex's MCP scaffolding). **Why:** we measure engineering, not tool-following; keeps the
+benchmark agnostic to harnesses, including future ones.
+
+## D-3 · Workload = weighted set of input generators incl. data distribution — accepted · 2026-09-20
+Not a single shape. Data distribution (raggedness, skew, sparsity, routing) is a first-class
+parameter because it drives performance for the most interesting families. Hidden seeds at final
+eval; shapes/distributions public. **Why:** matches real perf work ("here's the trace"), defeats
+memoisation, and lets specialisation/dispatch be a legitimate strategy.
+**Open:** should some tasks hold out *shapes* too (AgentKernelArena found agents hardcode shape
+assumptions)? Provisional: no for regime tasks (the point is specialising to a stated regime);
+yes as a separate generalisation track later.
+
+## D-4 · Baseline = strongest automatic baseline, same session — accepted · 2026-09-20
+`min(eager, torch.compile default, max-autotune ± cudagraphs)` plus the "lazy battery"
+(DESIGN §3.3.5), measured interleaved with the candidate. Secondary: roofline fraction
+(Atrex/SOL-ExecBench style). **Why:** eager baselines inflate results (KernelBench authors now say
+so themselves); same-session ratios cancel box-to-box drift.
+
+## D-5 · Two-level generator: certified motif families, then composition grammar — accepted · 2026-09-20
+Level 1 has hand-written reference strategies (hidden) → strong certificates (headroom + regime
+flip). Level 2 composes motifs via a typed DAG grammar → admitted via automatic headroom
+certificate only. **Why:** pure random DAGs (cf. DRTriton) give volume without performance
+structure; pure hand-written families aren't "procedural". Level 1 validates the premise; Level 2
+scales it. MVP is Level 1 only.
+
+## D-6 · Budgets in turns/tokens + sandbox GPU-seconds, not wall-clock — provisional · 2026-09-20
+**Why:** wall-clock couples score to serving throughput, which would confound the quant study
+(quantized models decode faster). Wall-clock cap exists only as a safety limit.
+Initial numbers to pilot: 100 turns, 1.5M total tokens, 30 GPU-min.
+
+## D-7 · Reuse map — accepted · 2026-09-20
+See ECOSYSTEM.md "Reuse decisions". Headlines: Atrex-style task dir; timing = GPU MODE `eval.py`
+*design* (licence forbids code reuse) + ABBA interleave; anti-cheat = union of published exploit
+catalogues as a regression suite; tolerance calibration à la SOL-ExecBench; no Redis/FastAPI
+backend for MVP; mini-swe-agent-style harness for controlled runs.
+
+## D-8 · Infra: Modal (sandboxes + serving) + one root-VM provider (reference timing) — superseded by D-13 · 2026-09-20
+**Why Modal:** best programmatic parallel sandboxes, per-second billing, used by GPU MODE whose
+dataset card calls Modal timings more trustworthy than their on-prem box. One account covers
+serving too. **Why a root VM as well:** can't lock clocks or guarantee perf counters under gVisor,
+and gVisor may tax host-side launch overhead — which is one of our regime axes. Probes in
+ACCESS.md decide whether scores of record can come from Modal. Cost-optimise serving to RunPod
+later only if spend matters.
+
+## D-9 · Quant study model: Qwen3.8-27B dense (fallback Qwen3.6-27B) — provisional · 2026-09-20
+**Why:** BF16-native (honest baseline), dense (no routing confound), BF16 fits one H100 so every
+arm runs TP=1 on identical hardware, reputable FP8/GPTQ/AWQ/NVFP4/GGUF checkpoints exist, and
+reported agentic-coding strength suggests it clears the floor. Natively low-precision models
+(gpt-oss, Devstral-2, Kimi) are excluded because they have no true higher-precision reference.
+Phase-1 arms: BF16×2 (null), FP8, W4A16-GPTQ, W4A16-AWQ. Sub-4-bit deferred (needs llama.cpp +
+bridge arms). **Revisit if:** G2 pilot shows BF16 scores at floor on our tasks (then tasks need an
+easier tier, or the model must be bigger), or vLLM #55766 blocks prefix caching on 3.8.
+
+## D-12 · A flat headline score is not a null result — accepted · 2026-09-20
+Following 2607.27275, the quant study reports per-channel failure rates (format, hallucinated
+API, perseveration, abandon-known-good, regime regret) and tokens/turn alongside score.
+Raw completions are logged and parsed by us, not only by the serving engine's tool parser.
+
+## D-10 · Score is 0 on any correctness failure; final submission is what counts — accepted · 2026-09-20
+No credit for best-intermediate. **Why:** shipping a regression as the final answer is a real
+engineering failure and plausibly precision-sensitive (hygiene metric). Best-seen is still
+recorded for analysis.
+
+## D-11 · Forward-only, single-GPU, inference-style tasks for MVP — accepted · 2026-09-20
+Backward passes, multi-GPU, and memory-capped variants are later axes. **Why:** smallest version
+that can falsify D-1.
+
+## D-13 · Infra: root VMs for everything (Lambda first), provider-agnostic runner — provisional · 2026-09-20
+**Supersedes D-8.** Prompted by Emaan asking why not use Lambda for everything.
+**Decision.** Agent sandboxes, final evaluation, and vLLM serving all run on root GPU VMs
+(Lambda first; Crusoe/Hyperstack as alternates). Agent runs in Docker (`--gpus`) on the VM; final
+eval in a fresh container on the same SKU; serving on a *separate* VM. Provisioning/teardown/
+autostop via SkyPilot rather than our own code. The runner's only infra assumption is "a Docker
+host with an NVIDIA GPU reachable over SSH", so Modal or any other provider can be added as a
+burst backend without touching benchmark code.
+**Why.** (1) The environment the agent profiles in must be the environment it is scored in —
+otherwise launch-bound decisions are made against different host overheads (gVisor) than the
+scoring box. (2) Root gives locked clocks, guaranteed CUPTI counters, pinned driver. (3) Cost is
+about equal. (4) Scale is small (~300–400 GPU-h of trajectories; 4–8 VMs).
+**Costs accepted.** We own VM lifecycle (leak risk → SkyPilot autostop + on-box idle watchdog +
+spend log); Lambda capacity is flaky (→ provider-agnostic runner); no L40S on Lambda (hardware
+axis becomes A100 vs H100 / A10 / GH200).
+**Unverified, probe day 1:** Lambda VMs permit `nvidia-smi -lgc/-pm` and
+`NVreg_RestrictProfilingToAdminUsers=0`. If not → Crusoe (documents clock locking).
+
+## D-14 · Primary bench SKU = A100-40GB SXM4 on Lambda; H100 is the second SKU — provisional · 2026-09-20
+**Context.** Live Lambda API (2026-09-20): `gpu_1x_a100_sxm4` $1.99/h, available in 3 regions.
+1× H100 (PCIe $3.29, SXM5 $4.29) **no capacity anywhere**; only 2× H100 ($8.38/h) available.
+8× nodes carry **no per-GPU discount** (8×H100 $3.99/GPU, 8×A100 $1.99/GPU).
+**Decision.** Certify tasks and run agent trajectories on A100-40GB. H100 becomes the
+hardware-axis second SKU, run opportunistically when 1× capacity appears.
+**Why.** Availability is the binding constraint, and it's half the price. Scientifically fine:
+tasks are bf16/fp16/fp32 (no FP8 needed on the bench GPU), Triton/torch.compile are mature on
+Ampere, 40 GB just bounds workload sizes (generator already checks memory fit).
+**Consequence.** Serving still needs ≥ 80 GB Hopper for BF16-27B and FP8 arms → 2× H100 at
+$8.38/h today, or GH200 ($2.29/h, 96 GB, aarch64 — vLLM support to verify) / 1× H100 when
+available. Revisit serving provider at M3.
+
+## D-15 · Frontier reference agent may be any vendor (OpenAI key offered) — accepted · 2026-09-20
+Role is ceiling + discriminative check + red-teaming the evaluator (PLAN M3); vendor-neutral.
+Uses the same OpenAI-compatible harness path as the open-weight model.
+
+## D-16 · Public repo; answer-key material kept out of it — accepted · 2026-09-20
+**Context.** Emaan had already created `emaanh/HotLoop` as **public** (and set it as `origin`); I
+had proposed private without checking. Asked why private.
+**Decision.** Repo stays public: docs, taskgen, evaluator, runner, agents. Kept out (gitignored
+`private/`, later a separate private repo): hidden **reference strategies**, **hidden eval seeds**
+of any frozen task set, and certification data that reveals best-known solutions.
+**Why.** Public is the right default for research. The only real risk is contamination/lookup of
+the answer key. Procedural generation is itself the defence: the generator is public, a frozen
+set's seed is not, and fresh tasks can be regenerated from an unpublished seed.
+**Consequence for the runner.** Agent sandboxes get **restricted network egress** (package
+indexes only, no general web/GitHub), otherwise an agent could fetch this repo or published
+kernels mid-run. Log all egress attempts as a trajectory signal.

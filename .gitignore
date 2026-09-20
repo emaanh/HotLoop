@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+results/
+trajectories/
+*.nsys-rep
+*.ncu-rep
+
+# hidden benchmark material (reference strategies, eval seeds, certification data) — never public, see D-16
+private/
