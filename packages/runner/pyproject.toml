@@ -5,6 +5,9 @@ description = "Sandbox lifecycle, budgets, trajectory capture on remote GPU host
 requires-python = ">=3.11,<3.13"
 dependencies = ["hotloop-schemas"]
 
+[project.scripts]
+hotloop-vm = "hotloop_runner.lambda_cloud:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

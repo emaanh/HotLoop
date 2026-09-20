@@ -173,3 +173,12 @@ seed; outputs of timed calls are spot-checked against the reference afterwards. 
 CUPTI timings are recorded as *diagnostics*; a large disagreement with wall time raises a flag.
 **Why not CUPTI as primary.** It would make launch-bound tasks unscoreable and pins us to one
 CUDA/cupti-python stack.
+
+## D-20 · No SkyPilot; own thin Lambda client; API key never touches a VM — accepted · 2026-09-20
+**Amends D-13.** SkyPilot's autodown works by copying provider credentials onto the VM so the
+VM can terminate itself. Bench VMs host untrusted agents with a shell → the Lambda key could be
+exfiltrated. **Decision:** `hotloop-vm` (stdlib, ~150 lines) drives the Lambda API from the
+operator machine only. **Cost accepted:** no on-box auto-terminate. Mitigations: every launch is
+written to a local ledger (`~/.hotloop/vm_ledger.jsonl`), `hotloop-vm reap --older-than-hours H`,
+instances are terminated at the end of each work session, and live instances are listed in
+ACCESS.md. Emaan can always check/kill at cloud.lambda.ai/instances.
