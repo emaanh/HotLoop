@@ -95,6 +95,8 @@ def up(a) -> None:
 
     res = f"/lambda/nfs/{FS_NAME}/{Path(a.out).name}"
     cap_h = a.deadline_hours + a.grace_hours
+    if a.drill:  # exercise the dead-man alone: no batch, fires after 3 minutes
+        cap_h = 0.05
     batch = (f"python scripts/run_batch.py --launch {a.launch} --ssh-key {key_name} "
              f"--deadline-hours {a.deadline_hours} --out {a.out} {a.batch_args}")  # fmt: skip
     script = f"""set -e
@@ -128,7 +130,7 @@ for i in 1 2 3 4 5; do hotloop-vm terminate-all && break; sleep 30; done
 EOS
 chmod +x ~/batch.sh ~/deadman.sh
 nohup ~/deadman.sh > ~/deadman.out 2>&1 &
-nohup ~/batch.sh > /dev/null 2>&1 &
+{"" if a.drill else "nohup ~/batch.sh > /dev/null 2>&1 &"}
 echo started
 """
     print(ssh(host, script).strip()[-300:], flush=True)
@@ -187,7 +189,8 @@ def main() -> int:
     u.add_argument("--launch", type=int, default=4)
     u.add_argument("--deadline-hours", type=float, default=7.0)
     u.add_argument("--grace-hours", type=float, default=3.0)
-    u.add_argument("--batch-args", required=True, help="remaining run_batch.py arguments")
+    u.add_argument("--batch-args", default="", help="remaining run_batch.py arguments")
+    u.add_argument("--drill", action="store_true", help="no batch; dead-man fires after 3 min")
     for name in ("status", "fetch", "down", "wait"):
         sub.add_parser(name)
     for sp in sub.choices.values():
