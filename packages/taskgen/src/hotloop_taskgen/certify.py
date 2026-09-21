@@ -22,6 +22,10 @@ from pathlib import Path
 
 from hotloop_schemas import Result, load_task_spec
 
+# Certification sweeps run ~10 submissions per task: trade a little precision for a lot of time.
+# Headroom/regret effects of interest are >= 1.25x, far above a 2% CI.
+EVAL_FLAGS = ["--rel-halfwidth", "0.02", "--max-pairs", "30", "--max-calls", "64"]
+
 LAZY = {
     "lazy_compile_default": "run = torch.compile(reference)",
     "lazy_compile_max_autotune": "run = torch.compile(reference, mode='max-autotune-no-cudagraphs')",
@@ -64,11 +68,16 @@ def _evaluate(task: Path, submission: Path, out: Path, device: str) -> Result:
             str(out),
             "--device",
             device,
+            *EVAL_FLAGS,
         ],
         capture_output=True,
         text=True,
         check=False,
     )
+    if not out.is_file():
+        return Result(
+            task_id=task.name, evaluator_version="?", status="error", score=0.0, error="no result"
+        )
     return Result.model_validate_json(out.read_text())
 
 
