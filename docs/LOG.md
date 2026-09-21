@@ -2,6 +2,23 @@
 
 Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends belong here too.
 
+## 2026-09-21 (21:30Z) — Controller VM live; dead-man drilled; Lambda flaky today
+
+- Emaan chose the controller option (D-31). **Drill first:** controller up with no batch and a
+  3-minute cap → it terminated itself at the cap with no action from the laptop. Only then the
+  real run.
+- Real run, attempt 1: 3 of 4 A100s sat in `booting` for 25+ min (yesterday: 4 min). The launcher
+  waited for hosts sequentially with a 15-min timeout, so one slow boot would have sunk the batch.
+  While fixing that I found three more weak points, all now fixed: `nohup`'d jobs ignore SIGINT
+  and die on SIGTERM without running `finally` (added signal handlers); one combined terminate
+  call could fail on a stale id and leave live instances (terminate per instance); Lambda's API
+  timed out mid-terminate (client now retries). Killed attempt 1 by hand, terminated its 4 hosts
+  by id, kept the controller.
+- Attempt 2 (21:20Z) from the same controller with the fixed code: parallel 12-min boot window,
+  all 4 hosts up, image built, **23 trajectories running on 4 hosts at 21:30Z**. Batch deadline
+  02:20Z, dead-man 03:04Z, results syncing to `/lambda/nfs/hotloop-results/m3` every 5 min.
+- Cost of the false start ≈ $3 (4 A100s × ~20 min + controller).
+
 ## 2026-09-21 (20:40Z) — Second M3 batch: laptop slept overnight, $99 billed, safeguards failed (D-30)
 
 - 3 A100s up 16.6 h; ~12 h of that the operator laptop was asleep (lid closed, battery). Deadline
