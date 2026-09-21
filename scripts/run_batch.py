@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import os
 import queue
+import signal
 import subprocess
 import sys
 import threading
@@ -188,6 +189,14 @@ def main() -> int:
     p.add_argument("--evals", type=int, default=3)
     p.add_argument("--max-completion-tokens", type=int, default=400_000)
     a = p.parse_args()
+
+    def on_signal(signum, _frame):
+        # nohup'd background jobs ignore SIGINT and die on SIGTERM without running `finally`.
+        # Turn both into an exception so instances are always terminated on the way out.
+        raise KeyboardInterrupt(f"signal {signum}")
+
+    signal.signal(signal.SIGTERM, on_signal)
+    signal.signal(signal.SIGINT, on_signal)
 
     if on_battery() and not a.allow_battery:
         raise SystemExit("refusing to start on battery power: a sleeping laptop stalls the batch "
