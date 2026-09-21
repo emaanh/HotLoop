@@ -67,10 +67,12 @@ def terminate_launched(why: str) -> None:
     log("!!! COULD NOT TERMINATE - check cloud.lambda.ai/instances NOW: " + " ".join(LAUNCHED))
 
 
-def launch_and_prepare(n: int, instance_type: str) -> list[str]:
+def launch_and_prepare(n: int, instance_type: str, ssh_key: str) -> list[str]:
     for i in range(n):
         try:
-            LAUNCHED.append(vm("launch", instance_type, "--name", f"hotloop-batch-{i}"))
+            LAUNCHED.append(
+                vm("launch", instance_type, "--name", f"hotloop-batch-{i}", "--ssh-key", ssh_key)
+            )
         except subprocess.CalledProcessError as e:
             log(f"launch {i} failed (capacity?): {e.stderr[-160:]}")
     if not LAUNCHED:
@@ -136,6 +138,9 @@ def main() -> int:
     p.add_argument("--instance-type", default="gpu_1x_a100_sxm4")
     p.add_argument("--deadline-hours", type=float, default=8.0)
     p.add_argument("--allow-battery", action="store_true")
+    p.add_argument(
+        "--ssh-key", default="emaan-macbook-hotloop", help="Lambda SSH key name for launched hosts"
+    )
     p.add_argument("--tasks", required=True, type=Path)
     p.add_argument("--reps", type=int, default=3)
     p.add_argument("--model", required=True)
@@ -170,7 +175,11 @@ def main() -> int:
 
     threading.Thread(target=watchdog, daemon=True).start()
     try:
-        hosts = a.hosts.split(",") if a.hosts else launch_and_prepare(a.launch, a.instance_type)
+        hosts = (
+            a.hosts.split(",")
+            if a.hosts
+            else launch_and_prepare(a.launch, a.instance_type, a.ssh_key)
+        )
         tasks = sorted(d for d in a.tasks.iterdir() if (d / "task.toml").is_file())
         jobs: queue.Queue = queue.Queue()
         for rep in range(a.reps):

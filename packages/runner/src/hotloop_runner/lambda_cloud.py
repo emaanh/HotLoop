@@ -73,7 +73,13 @@ def instances() -> list[dict]:
     return _request("GET", "/instances")["data"]
 
 
-def launch(type_name: str, region: str | None, name: str, ssh_key: str) -> str:
+def launch(
+    type_name: str,
+    region: str | None,
+    name: str,
+    ssh_key: str,
+    file_systems: list[str] | None = None,
+) -> str:
     if region is None:
         regions = instance_types()[type_name]["regions_with_capacity_available"]
         if not regions:
@@ -88,12 +94,19 @@ def launch(type_name: str, region: str | None, name: str, ssh_key: str) -> str:
             "ssh_key_names": [ssh_key],
             "quantity": 1,
             "name": name,
+            **({"file_system_names": file_systems} if file_systems else {}),
         },
     )["data"]
     (iid,) = data["instance_ids"]
     price = instance_types()[type_name]["instance_type"]["price_cents_per_hour"] / 100
     _ledger("launch", id=iid, type=type_name, region=region, name=name, usd_per_hour=price)
     return iid
+
+
+def add_ssh_key(name: str, public_key: str) -> str:
+    return _request("POST", "/ssh-keys", {"name": name, "public_key": public_key.strip()})["data"][
+        "id"
+    ]
 
 
 def wait_active(iid: str, timeout_s: float = 900) -> dict:
@@ -125,6 +138,10 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--region")
     lp.add_argument("--name", default="hotloop")
     lp.add_argument("--ssh-key", default="emaan-macbook-hotloop")
+    lp.add_argument("--file-system", action="append", default=None, help="persistent FS name(s)")
+    kp = sub.add_parser("ssh-key-add")
+    kp.add_argument("name")
+    kp.add_argument("public_key_file", type=Path)
     sub.add_parser("list")
     wp = sub.add_parser("wait")
     wp.add_argument("id")
@@ -143,7 +160,9 @@ def main(argv: list[str] | None = None) -> int:
             cents = v["instance_type"]["price_cents_per_hour"]
             print(f"${cents / 100:6.2f}/h  {name:30s} {', '.join(regions) or '-'}")
     elif a.cmd == "launch":
-        print(launch(a.type, a.region, a.name, a.ssh_key))
+        print(launch(a.type, a.region, a.name, a.ssh_key, a.file_system))
+    elif a.cmd == "ssh-key-add":
+        print(add_ssh_key(a.name, a.public_key_file.read_text()))
     elif a.cmd == "list":
         for i in instances():
             print(i["id"], i["status"], i.get("ip"), i["instance_type"]["name"], i.get("name"))
