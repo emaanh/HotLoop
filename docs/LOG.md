@@ -2,6 +2,36 @@
 
 Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends belong here too.
 
+## 2026-09-21 (02:10Z) — First agent trajectory (cost pilot): gpt-5.5 beats my best-known; my bug cost it ten turns
+
+`openai/gpt-5.5`, reasoning effort medium, Responses API, caps 50 turns / 150k generated tokens, task
+`ragged-pool-zipf-heavy-tail-s0` (certified best-known 10.93×, lazy battery 1.00×). A100-40GB sandbox,
+no network. Run dir `runs/pilot/` (not committed).
+
+- **Official score 11.57× / 11.59× / 11.60×** (3 fresh-container evaluations, all `ok`, no flags;
+  8 pairs each to ±1%). The agent wrote a CUDA C++ extension (JIT-built with `cpp_extension.load`)
+  and iterated through ~10 kernel variants, self-checking after each: 6.2 → 8.0 → 8.2 → 9.4 →
+  10.8×. **It beat my jagged-Triton strategy** → best-known for this task is now 11.6×. The
+  benchmark is not saturated by its author, which is how it should be.
+- Behaviour worth noting: turn 2 was measuring the segment-length distribution over several seeds
+  before writing any code — regime diagnosis, unprompted.
+- Cost: 40 turns, 1.17M input tokens (93% cached), 34k generated, 29 min wall, of which only
+  ~6 min was model latency; most of the rest was ~25 self-checks at ~60 s each (every
+  `hotloop-eval` re-measures four baselines). ≈ **$2** at litellm's listed gpt-5.5 prices
+  (unverified against OpenAI's current price list). Full 12×3 batch ≈ $70–150 API.
+- **My bug, found by the agent:** a repo-wide `ruff format` rewrote quote style in the six ragged
+  `workload.py` files after sealing and I committed it, so the in-sandbox evaluator refused the
+  package ("does not match its content_hash"). The agent spent turns 3–12 diagnosing it, read the
+  evaluator source, and worked around it by re-sealing a copy. All three official evaluations
+  errored for the same reason. Fix: restored sealed files, `benchmark/` excluded from ruff,
+  `tests/test_benchmark_sealed.py` checks every committed package. Pilot re-scored officially
+  after re-syncing the correct task files. This trajectory is tainted for turn-efficiency
+  analysis; the task is re-run in the batch.
+- Improvement noted, not done: cache baseline timings inside the agent's sandbox so a self-check
+  costs seconds, not a minute. It would roughly halve GPU time per trajectory.
+- Launched 3 more A100s; batch = 12 tasks × 3 reps across 4 hosts, full task budget (100 turns,
+  400k generated tokens).
+
 ## 2026-09-21 (01:20Z) — M2 done: dev-v0 emitted and certified with the real evaluator; M3 plumbing live
 
 Conditions: third Lambda A100-SXM4-40GB box, torch 2.11.0+cu128, clocks locked.
