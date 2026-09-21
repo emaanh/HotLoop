@@ -116,3 +116,48 @@ def test_failing_and_slow_commands_are_observations_not_crashes(tmp_path):
     agent.run(task="x")
     obs = [e for e in events(tmp_path) if e.type == "observation"]
     assert obs[0].payload["returncode"] == 7 and obs[0].payload["duration_s"] is not None
+
+
+def test_time_limit_exit_still_leaves_a_run_end_event(tmp_path):
+    agent = make(tmp_path, ["sleep 1.2"], wall_time_limit_seconds=1)
+    assert agent.run(task="x")["exit_status"] == "TimeExceeded"
+    assert (
+        events(tmp_path)[-1].type == "run_end"
+        and events(tmp_path)[-1].payload["reason"] == "TimeExceeded"
+    )
+
+
+def test_api_failure_mid_run_is_an_infra_failure_not_a_result(tmp_path, monkeypatch):
+    """The quota incident: the API died mid-trajectory and the half-done work got scored."""
+    from hotloop_agents import mini
+
+    class Dies(ScriptedModel):
+        def query(self, messages, **kw):
+            if self.i >= 2:
+                raise RuntimeError("insufficient_quota")
+            return super().query(messages, **kw)
+
+    monkeypatch.setattr(mini, "build_model", lambda *a, **k: Dies(["true"]))
+    session = tmp_path / "session.json"
+    session.write_text(json.dumps({"run_id": "t", "exec_prefix": ["bash", "-lc"], "exec_remote_template": None,
+                                   "budget": {"max_turns": 10, "wall_seconds": 60}}))  # fmt: skip
+    readme = tmp_path / "README.md"
+    readme.write_text("task")
+    rc = mini.main(
+        [
+            "--session",
+            str(session),
+            "--task-readme",
+            str(readme),
+            "--model",
+            "x",
+            "--out",
+            str(tmp_path / "o"),
+        ]
+    )
+    assert rc == mini.INFRA_FAILURE
+    assert not (tmp_path / "o" / "agent_summary.json").exists()
+    last = [json.loads(x) for x in (tmp_path / "o" / "trajectory.jsonl").read_text().splitlines()][
+        -1
+    ]
+    assert last["type"] == "run_end" and last["payload"]["reason"] == "infra_failure"

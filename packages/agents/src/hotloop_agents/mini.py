@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from hotloop_schemas import TrajectoryEvent
 
 SUBMIT_SENTINEL = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+INFRA_FAILURE = 3  # exit code: the API/transport failed; the trajectory is not a result
 
 SYSTEM = """You are an expert GPU performance engineer working autonomously in a Linux sandbox that has a \
 real, exclusive NVIDIA GPU. You act by calling the `bash` tool. There is no human to ask; decide for yourself \
@@ -163,6 +164,17 @@ class BudgetedAgent(DefaultAgent):
         with open(self.config.events_path, "a") as f:
             f.write(ev.model_dump_json() + "\n")
 
+    def run(self, task: str = "", **kwargs) -> dict:
+        """Every legitimate ending leaves a run_end event (time-limit and format-error exits are
+        raised inside mini-swe-agent and would otherwise leave the log without one)."""
+        info = super().run(task, **kwargs)
+        if not getattr(self, "_ended", False):
+            self._event(
+                "run_end",
+                {"reason": info.get("exit_status", "?"), **self.tokens, "turns": self.n_calls},
+            )
+        return info
+
     def get_template_vars(self, **kwargs) -> dict:
         return super().get_template_vars(
             sentinel=SUBMIT_SENTINEL,
@@ -204,6 +216,7 @@ class BudgetedAgent(DefaultAgent):
             try:
                 out = self.env.execute(action)
             except Submitted:
+                self._ended = True
                 self._event(
                     "run_end", {"reason": "submitted", **self.tokens, "turns": self.n_calls}
                 )
@@ -265,7 +278,17 @@ def main(argv: list[str] | None = None) -> int:
         output_path=a.out / "mini_trajectory.json", events_path=a.out / "trajectory.jsonl",
         run_id=session["run_id"],
     )  # fmt: skip
-    info = agent.run(task=a.task_readme.read_text())
+    try:
+        info = agent.run(task=a.task_readme.read_text())
+    except Exception as e:  # noqa: BLE001 - see comment: anything escaping is infra
+        # The agent never *chooses* to raise: legitimate endings (submitted, budget, time, repeated
+        # format errors) return normally. Anything that escapes is the API or the transport dying
+        # (quota, auth, network) - possibly mid-trajectory. That is not a result.
+        agent._event(
+            "run_end", {"reason": "infra_failure", "error": f"{type(e).__name__}: {e}"[:500]}
+        )
+        print(f"INFRA FAILURE after {agent.n_calls} turns: {type(e).__name__}: {str(e)[:300]}")
+        return INFRA_FAILURE
     (a.out / "agent_summary.json").write_text(json.dumps(
         {"exit_status": info.get("exit_status"), "turns": agent.n_calls, **agent.tokens,
          "model": a.model, "reasoning_effort": a.reasoning_effort}, indent=1))  # fmt: skip

@@ -52,8 +52,24 @@ def main() -> int:
         agent_cmd += ["--reasoning-effort", a.reasoning_effort]
     if a.max_turns:
         agent_cmd += ["--max-turns", str(a.max_turns)]
-    agent_rc = sh(*agent_cmd, check=False)  # a crashed agent still gets its submission scored
+    agent_rc = sh(*agent_cmd, check=False)
     t_agent = time.time() - t0
+    if agent_rc != 0:  # API/transport died (possibly mid-run): not a result. Tear down, keep the
+        # partial artefacts aside for forensics, and leave no summary.json so it is retried.
+        sh(
+            "hotloop-run",
+            "finish",
+            "--session",
+            str(session),
+            "--out",
+            str(out),
+            "--evals",
+            "0",
+            check=False,
+        )
+        out.rename(out.with_name(f"{out.name}__crashed_{int(time.time())}"))
+        print(f"{run_id}: INFRA FAILURE (agent rc={agent_rc}), not scored, will be retried")
+        return 3
     sh(
         "hotloop-run",
         "finish",
