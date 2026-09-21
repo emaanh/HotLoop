@@ -238,3 +238,31 @@ a flip, so regret must be recomputed as best-known moves.
    visibly lose (0.07–0.75×). They are scored and reported separately from headroom tasks.
 4. Third family still to find; candidates: multi-tensor update (horizontal fusion), pairwise
    top-k. Not needed to proceed to M3-lite.
+
+## D-25 · M3-lite runner: agent loop on the operator machine, sandbox with no network — accepted · 2026-09-21
+- The agent loop (mini-swe-agent + API key) runs on the operator's machine. Only *commands* cross
+  the SSH connection into `docker exec` on the bench VM. No API key or Lambda key ever reaches a VM.
+- Agent container: `--network none`, task mounted read-only, one writable submission dir, image
+  contains only `schemas` + `evaluator` (never taskgen, never `private/`). Only a task's
+  PUBLIC_FILES are copied to the host. This is stricter than D-16's "package indexes only": simpler
+  to get right, and the image already has torch/triton/nvcc/cmake/ninja. Revisit if agents
+  demonstrably need pip.
+- Scoring: fresh container per evaluation (`--network none --cap-drop ALL
+  --security-opt no-new-privileges`, submission mounted read-only and copied), ≥3 evaluations (D-22).
+- Runner and agent share no code: the runner writes a `session.json` (exec prefix + remote command
+  template + budget); the agent CLI consumes it. Boundary test still passes.
+- Every command is wrapped in in-container `timeout -k` (mini-swe-agent's own timeout would orphan
+  the in-container process, see ECOSYSTEM).
+**Known gap:** GPU-seconds are not metered yet; budgets enforced are turns, generated tokens,
+per-command timeout and wall-clock. Per-command durations are logged for later accounting.
+
+## D-26 · Token budget counts *generated* tokens — amends D-6 · 2026-09-21
+Summing prompt tokens per call double-counts the growing context (100 turns × 30k context ≈ 3M
+"tokens" of mostly cache hits) and would make the budget a function of caching behaviour. The
+budget is: turns (100) and cumulative generated tokens incl. reasoning (400k for M3-lite pilot).
+Input/cached tokens are logged per call for cost accounting.
+
+## D-27 · Frontier reference model for M3-lite: `openai/gpt-5.5` via the Responses API — provisional · 2026-09-21
+Smoke-tested end-to-end (2 turns, tool calls parsed, usage captured). Reasoning effort to be fixed
+after a 3-trajectory cost pilot. Newer ids exist on the account (`gpt-5.6-*`) but their tiering is
+unknown to me; revisit if Emaan prefers one.
