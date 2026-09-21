@@ -2,6 +2,22 @@
 
 Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends belong here too.
 
+## 2026-09-21 (04:10Z) — First M3 batch killed by OpenAI quota; 4 clean trajectories; safeguards added
+
+- Batch of 36 started 02:21Z on 4 A100s. OpenAI began returning `insufficient_quota` intermittently
+  within ~25 min and permanently by ~03:06Z. **Only 4 trajectories ended by the agent's own choice
+  (`submitted`)**; 5 were cut off mid-work, 27 never got a model response. All 32 quarantined in
+  `runs/m3/_failed_insufficient_quota/` (not committed). Details and fixes: D-29.
+- The 4 clean ones (3 official evaluations each, all `ok`): bchain vector-on-the-right **22.4×**
+  (certified best 18.1×), bchain shared-wide-middle **7.0×** (6.6×), chain lowrank-sandwich **28.1×**
+  (23.4×; diagnostic tier), chain as-written-is-optimal control **1.00×** after 50 turns and $2.49
+  of trying. With the pilot (11.6× vs 10.9×) that is 4/4 headroom-or-diagnostic tasks where the
+  agent *beat my best-known strategy* — early sign that G2(a) "unsaturated" may **fail** for
+  gpt-5.5 on dev-v0; wait for the full batch before concluding.
+- I mis-reported a truncated run as "agent's final answer was incorrect". It wasn't final. Retracted.
+- Relaunched 04:00Z with the self-terminating batch runner: asked for 4 instances, Lambda had
+  capacity for 3. 32 trajectories, ~4.5 h expected, 8 h hard deadline.
+
 ## 2026-09-21 (02:10Z) — First agent trajectory (cost pilot): gpt-5.5 beats my best-known; my bug cost it ten turns
 
 `openai/gpt-5.5`, reasoning effort medium, Responses API, caps 50 turns / 150k generated tokens, task

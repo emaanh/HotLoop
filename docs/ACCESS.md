@@ -85,6 +85,8 @@ primary bench SKU (D-14); multi-GPU nodes give no per-GPU discount.
 |---|---|---|---|
 | 2026-09-20 | Lambda | `hotloop-probe-1` gpu_1x_a100_sxm4 us-west-2, 23:26Z–23:51Z (24.6 min): day-1 probes + evaluator GPU suite. **Terminated.** | 0.82 |
 | 2026-09-20 | Lambda | `hotloop-m2-explore` gpu_1x_a100_sxm4, 23:57Z–00:14Z (16.8 min): cross-box G0 retest + M2 regime exploration. **Terminated.** | 0.56 |
-| 2026-09-21 | Lambda | `hotloop-m2-certify` gpu_1x_a100_sxm4, launched 00:50Z: certification, M3 plumbing, pilot trajectory; now M3 batch host #1 — **LIVE** | 1.99/h, running |
-| 2026-09-21 | Lambda | `hotloop-m3-2`, `-3`, `-4` gpu_1x_a100_sxm4, launched 02:14Z: M3-lite batch hosts — **LIVE** | 3 × 1.99/h, running |
-| | | **Total to date** (from `~/.hotloop/vm_ledger.jsonl`) | **1.37** |
+| 2026-09-21 | Lambda | `hotloop-m2-certify` 00:50Z–03:48Z (178 min): certification, M3 plumbing, pilot, batch host #1. **Terminated.** | 5.90 |
+| 2026-09-21 | Lambda | `hotloop-m3-2/-3/-4` 02:14Z–03:48Z (94 min each): first M3 batch, cut short by OpenAI quota. **Terminated.** | 9.39 |
+| 2026-09-21 | Lambda | `hotloop-batch-0/-2/-3` launched 04:00Z by `run_batch.py` (self-terminating, 8 h deadline): remaining 32 trajectories — **LIVE** | 3 × 1.99/h, running |
+| | | **GPU total to date, terminated instances** (from `~/.hotloop/vm_ledger.jsonl`) | **16.66** |
+| 2026-09-21 | OpenAI | pilot + first batch ≈ $14 at litellm list prices (unverified); account hit `insufficient_quota`; Emaan topped up | ≈14 |

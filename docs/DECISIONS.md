@@ -278,3 +278,25 @@ strategy notes live only in `private/`. From now on, per-task winning strategies
 regime go in `private/`, and public docs report only headroom/regret numbers.
 **Why not scrub history.** The write-up would publish this regime structure anyway; the real
 defence against contamination is that tasks are generated, not that one set is secret.
+
+## D-29 · The batch owns instance lifecycle; an API failure is never a result — accepted · 2026-09-21
+**Incident (2026-09-21, ~20:05 local).** The OpenAI account hit `insufficient_quota` ~$14 into the
+first M3 batch. Consequences: (1) 27 trajectories "ran" with zero model output and had empty
+submission dirs scored three times each; (2) 5 trajectories were **cut off mid-work** and their
+half-finished submissions were scored and summarised as if the agent had stopped by choice — I
+briefly reported one of them as an agent failure ("final answer incorrect") before checking why it
+ended; (3) four instances kept billing until my session was re-invoked, which is luck, not design
+(Emaan: "worried about the instances running and charging me money overnight").
+**Decisions.**
+1. `run_batch.py --launch N` launches and prepares its own instances and terminates them in a
+   `finally` (success, crash, abort, Ctrl-C), plus a hard `--deadline-hours` after which everything
+   it launched is terminated and the process exits. Batches run under `caffeinate -i` because the
+   agent loop is local. D-20's "terminate at end of session" is no longer the only line of defence.
+2. Any exception escaping the agent (quota, auth, network — before or *during* a trajectory) is an
+   infrastructure failure: exit code 3, not scored, artefacts renamed `__crashed_<ts>`, no
+   `summary.json` so the resumable batch retries it, and the batch aborts immediately.
+3. Every legitimate ending writes a `run_end` event with its reason; analysis must never treat a
+   trajectory without one as a result.
+**Offered, not adopted:** an off-laptop kill switch (scheduled GitHub Action reaping old Lambda
+instances) — needs the Lambda key as a GitHub secret; Emaan has not approved it.
+**Lesson for me.** Check *why* a run ended before interpreting *what* it produced.
