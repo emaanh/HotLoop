@@ -84,4 +84,5 @@ primary bench SKU (D-14); multi-GPU nodes give no per-GPU discount.
 | Date | Provider | What | $ |
 |---|---|---|---|
 | 2026-09-20 | Lambda | `hotloop-probe-1` gpu_1x_a100_sxm4 us-west-2, 23:26Z–23:51Z (24.6 min): day-1 probes + evaluator GPU suite. **Terminated.** | 0.82 |
-| | | **Total to date** | **0.82** |
+| 2026-09-20 | Lambda | `hotloop-m2-explore` gpu_1x_a100_sxm4, 23:57Z–00:14Z (16.8 min): cross-box G0 retest + M2 regime exploration. **Terminated.** | 0.56 |
+| | | **Total to date** (from `~/.hotloop/vm_ledger.jsonl`) | **1.37** |

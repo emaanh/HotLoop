@@ -206,3 +206,35 @@ Between-process SD ≈ 1% is not visible inside a session (codegen/allocation/CP
 per process). **Decision:** scores of record = geometric mean over ≥3 evaluations in fresh
 processes, reported with the between-run spread; minimum claimable effect 3%. **To investigate:**
 core pinning for workers; whether the variance comes from the compiled baseline or the candidate.
+
+## D-23 · Gate G1 passes on exploration data; D-1 stands — accepted (provisional on evaluator-grade re-measurement) · 2026-09-21
+**Evidence** (`docs/data/m2/`, A100-40GB, torch 2.11+cu128, exploration timing, fixed inputs):
+- *Matrix chain* `A@B@C@D`: eager = all three torch.compile modes at every point (the compiler
+  never re-associates). 4 regimes with headroom 4.6× / 28× / 29× / 61× over the best automatic
+  baseline, 4 different argmax orders, controls at 1.00×, cross-regime regret up to 197×.
+- *Ragged softmax-pooling* (packed inputs, padded reference): 3 regimes with ≥3× headroom over
+  `max-autotune` and **three different winners** — tiny segments + rare outliers → compiled
+  scatter/segment ops (3.0–11.8×); small segments + outliers → jagged Triton, BLOCK=16 (8.0×);
+  heavy-tailed → jagged Triton, BLOCK=128 (11.1×). Cross-regime regret 1.3–6.8×. Where padding is
+  free (uniform lengths) the compiler wins and the jagged kernel scores 0.75× to 0.07×.
+  Length-bucketed dense never wins.
+**Verdict.** G1 (a) argmax changes, (b) penalty ≥1.25×, (c) ≥1.3× headroom in ≥2 regimes: met by
+2 of 2 families explored (gate asked for ≥2 of 3). The premise of D-1 is not falsified.
+**Caveats that stay attached to this claim.** Exploration harness, not the evaluator; one box;
+flips are relative to *my* strategies — a better kernel could dominate several regimes and erase
+a flip, so regret must be recomputed as best-known moves.
+
+## D-24 · Family decisions after G1 — accepted · 2026-09-21
+1. **Pure matrix chain is lazy-solvable**: `torch.linalg.multi_dot` is within 3% of the best
+   order everywhere. It fails anti-triviality (DESIGN §3.3.5). → `multi_dot` joins the lazy
+   battery; the family becomes **algebraic structure** with the plain chain as a *diagnostic
+   tier* ("did the agent look at shapes at all?") and disguised members where no library
+   one-liner applies (`diag(A@B@C)`, `((A@B)*M).sum()`, low-rank-plus-identity powers, Kronecker
+   products, chains broken by cheap commuting ops).
+2. **Ragged pooling** is the first full family: regimes = {tiny+outliers, small+outliers,
+   heavy-tail} as sibling tasks, plus {uniform} as a **no-headroom control**.
+3. **No-headroom controls are kept in the task set** (not rejected by the headroom certificate as
+   DESIGN §3.3 originally said): max score ≈ 1.0, but they are where pattern-matching agents
+   visibly lose (0.07–0.75×). They are scored and reported separately from headroom tasks.
+4. Third family still to find; candidates: multi-tensor update (horizontal fusion), pairwise
+   top-k. Not needed to proceed to M3-lite.

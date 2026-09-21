@@ -2,6 +2,54 @@
 
 Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends belong here too.
 
+## 2026-09-21 (00:00Z) — M2 exploration on a second A100: G1 passes
+
+Conditions: Lambda `gpu_1x_a100_sxm4`, different physical GPU (UUID …ab7541b6) from the M1 box, same
+CPU/driver, torch 2.11.0+cu128, triton 3.6.0, clocks locked, TF32 off. `scripts/explore_regimes.py`
+(exploration timing: fixed inputs, blocked medians — **not** the evaluator). Data: `docs/data/m2/`.
+Cost $0.56 (16.8 min). Total project spend $1.37.
+
+**Cross-box G0 retest** (evaluator GPU suite ×3): all green. Fused-Triton toy score 1.053, 1.057,
+1.114 here vs 1.045–1.067 on box 1 → 7 runs, mean ≈ 1.065, SD ≈ 2.3%, one ~5% outlier. Inside G0's
+3% but single-run CIs (±0.9%) clearly understate it → D-22 (pool ≥3 fresh-process runs) is
+necessary, not optional. The toy is a 55 µs host-launch-bound call, i.e. the noisiest kind.
+
+**Matrix chain** (fp32, ms/call; best automatic = eager everywhere except noted):
+
+| regime (dims) | best auto | best order | headroom | multi_dot |
+|---|---|---|---|---|
+| 8192·64·8192·64·16 | 1.034 | `(0(1(23)))` 0.036 | **28.9×** | 0.037 |
+| 4096·4096·32·4096·4096 | 7.428 | `((01)(23))` 0.266 | **28.4×** | 0.262 |
+| 8192·128·4096·128·2048 | 1.246 | `(0((12)3))` 0.272 | **4.6×** | 0.272 |
+| 2048·8192·8192·2048·1 | 18.34 | `(0(1(23)))` 0.300 | **61×** | 0.300 |
+| 16·8192·64·8192·8192 | 0.272 (max-autotune) | as written 0.298 | 0.91× (control) | 0.298 |
+| 512⁵ / 64·4096³·64 | 0.082 / 0.301 | as written | 1.00× (control) | = |
+
+Regret of using one regime's best order in another: up to **197×**. torch.compile never
+re-associates. **But `multi_dot` ≈ optimal everywhere → the pure family is lazy-solvable** (D-24).
+
+**Ragged softmax-pooling** (fp16, packed `(v, s, offsets)`, padded reference; ms/call):
+
+| regime | pad waste | best auto (max-autotune) | winner | headroom | runner-up |
+|---|---|---|---|---|---|
+| tiny(4)+outliers(1024), S=262k | 225× | 4.497 | scatter ops, compiled 0.380 | **11.8×** | jagged b16 0.524 |
+| tiny(4)+outliers(256), S=262k | 60× | 1.537 | scatter ops, compiled 0.436 | **3.5×** | jagged b16 0.603 |
+| tiny(2)+outliers(128), d=8 | 60× | 0.746 | scatter ops, compiled 0.247 | **3.0×** | scatter eager 0.526 |
+| small(16)+outliers(1024) | 57× | 2.050 | jagged Triton b16 0.256 | **8.0×** | jagged b128 0.341 |
+| zipf heavy tail | 84× | 2.003 | jagged Triton b128 0.180 | **11.1×** | jagged b1024 0.254 |
+| zipf heavy tail, d=256 | 48× | 1.253 | jagged Triton b128 0.234 | **5.4×** | scatter compiled 0.492 |
+| bimodal 1% long | 64× | 1.001 | jagged b128 0.141 | **7.1×** | jagged b1024 0.142 |
+| uniform len 64 (control) | 1× | 0.070 | — (jagged 0.094) | 0.75× | |
+| many tiny len 4 (control) | 1× | 0.088 | — (scatter 0.343; jagged b128 1.232 = **0.07×**) | 0.26× | |
+
+- Two-sided flip found on the second try. First grid had only one winner among headroom regimes;
+  the data hinted scatter beats jagged for tiny segments, but I'd only tested that with zero
+  padding waste (compiler wins). Adding rare long outliers gave waste *and* tiny segments → flip.
+- Block size alone is a regime effect: jagged b1024 is 54× slower than b128 at d=256.
+- Negative result: length-bucketed dense never wins anywhere (host sync + many small launches).
+- `max-autotune-no-cudagraphs` is the best automatic baseline at every ragged point and is
+  8–30× faster than eager on padded regimes — D-4 (score against the compiler) is doing real work.
+
 ## 2026-09-20 (evening) — M1 on a real A100: G0 passes within-box
 
 Conditions: Lambda `gpu_1x_a100_sxm4` us-west-2, A100-SXM4-40GB, driver 570.148.08, KVM, EPYC 7J13

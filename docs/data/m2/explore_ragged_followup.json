@@ -1,0 +1,214 @@
+{
+ "family": "ragged_followup",
+ "gpu": "NVIDIA A100-SXM4-40GB",
+ "torch": "2.11.0+cu128",
+ "results": {
+  "tiny4_outliers256_p001": {
+   "auto": {
+    "eager": 0.06551695199993901,
+    "compile_default": 0.0028140144999989993,
+    "compile_max_autotune_nocg": 0.001536860749998444,
+    "compile_reduce_overhead": 0.002933027666661777
+   },
+   "strategies": {
+    "seg_scatter": 0.0011715034375043842,
+    "bucketed_dense": 0.001941019100001995,
+    "triton_jagged_b16": 0.0006027743000004193,
+    "triton_jagged_b128": 0.0012379886666697834,
+    "triton_jagged_b1024": 0.003611177599987059,
+    "seg_scatter_compiled": 0.00043560245945947236
+   },
+   "errors": {},
+   "best_auto": "compile_max_autotune_nocg",
+   "best_auto_s": 0.001536860749998444,
+   "best_strategy": "seg_scatter_compiled",
+   "headroom": 3.528126888689963,
+   "speedup_vs_auto": {
+    "seg_scatter": 1.3118704570533473,
+    "bucketed_dense": 0.7917803333294682,
+    "triton_jagged_b16": 2.5496454477196107,
+    "triton_jagged_b128": 1.2414174631603316,
+    "triton_jagged_b1024": 0.4255843717030011,
+    "seg_scatter_compiled": 3.528126888689963
+   },
+   "S": 262144,
+   "d": 32,
+   "T": 1116616,
+   "lmax": 256,
+   "pad_waste": 60.10021708447667
+  },
+  "tiny4_outliers1024_p0005": {
+   "auto": {
+    "eager": 0.23753547900003014,
+    "compile_default": 0.012199729000030857,
+    "compile_max_autotune_nocg": 0.004497441749975906,
+    "compile_reduce_overhead": 0.012299692000055984
+   },
+   "strategies": {
+    "seg_scatter": 0.0007784830454511393,
+    "bucketed_dense": 0.001821109099989826,
+    "triton_jagged_b16": 0.0005242694705884787,
+    "triton_jagged_b128": 0.000983366473681264,
+    "triton_jagged_b1024": 0.0020793871111158702,
+    "seg_scatter_compiled": 0.00038044412195165756
+   },
+   "errors": {},
+   "best_auto": "compile_max_autotune_nocg",
+   "best_auto_s": 0.004497441749975906,
+   "best_strategy": "seg_scatter_compiled",
+   "headroom": 11.82155667671845,
+   "speedup_vs_auto": {
+    "seg_scatter": 5.777186511967758,
+    "bucketed_dense": 2.4696168669966183,
+    "triton_jagged_b16": 8.578492554463729,
+    "triton_jagged_b128": 4.5735154394064175,
+    "triton_jagged_b1024": 2.162868917448673,
+    "seg_scatter_compiled": 11.82155667671845
+   },
+   "S": 262144,
+   "d": 16,
+   "T": 1193416,
+   "lmax": 1024,
+   "pad_waste": 224.93033108320986
+  },
+  "tiny2_outliers128_d8": {
+   "auto": {
+    "eager": 0.05647595800007821,
+    "compile_default": 0.0014173613076921426,
+    "compile_max_autotune_nocg": 0.0007462242608702898,
+    "compile_reduce_overhead": 0.0014635497500042522
+   },
+   "strategies": {
+    "seg_scatter": 0.0005264619117644328,
+    "bucketed_dense": 0.0017758451000077003,
+    "triton_jagged_b16": 0.0007484456666683551,
+    "triton_jagged_b128": 0.0016687242727316102,
+    "triton_jagged_b1024": 0.00246572542857848,
+    "seg_scatter_compiled": 0.0002467495438602846
+   },
+   "errors": {},
+   "best_auto": "compile_max_autotune_nocg",
+   "best_auto_s": 0.0007462242608702898,
+   "best_strategy": "seg_scatter_compiled",
+   "headroom": 3.024217387379729,
+   "speedup_vs_auto": {
+    "seg_scatter": 1.4174325705145985,
+    "bucketed_dense": 0.4202079679511766,
+    "triton_jagged_b16": 0.9970319745346997,
+    "triton_jagged_b128": 0.4471824812907896,
+    "triton_jagged_b1024": 0.3026388308370964,
+    "seg_scatter_compiled": 3.024217387379729
+   },
+   "S": 524288,
+   "d": 8,
+   "T": 1111954,
+   "lmax": 128,
+   "pad_waste": 60.35219442530896
+  },
+  "small16_outliers1024": {
+   "auto": {
+    "eager": 0.06552854199992453,
+    "compile_default": 0.008554737499991916,
+    "compile_max_autotune_nocg": 0.0020497396666693626,
+    "compile_reduce_overhead": 0.008696088000021973
+   },
+   "strategies": {
+    "seg_scatter": 0.0012268616666612313,
+    "bucketed_dense": 0.0018705812000007426,
+    "triton_jagged_b16": 0.00025608384374997684,
+    "triton_jagged_b128": 0.00034130217999972956,
+    "triton_jagged_b1024": 0.0009158442000000378,
+    "seg_scatter_compiled": 0.000591973692306825
+   },
+   "errors": {},
+   "best_auto": "compile_max_autotune_nocg",
+   "best_auto_s": 0.0020497396666693626,
+   "best_strategy": "triton_jagged_b16",
+   "headroom": 8.00417408866524,
+   "speedup_vs_auto": {
+    "seg_scatter": 1.670717834266925,
+    "bucketed_dense": 1.095776899002593,
+    "triton_jagged_b16": 8.00417408866524,
+    "triton_jagged_b128": 6.005644812087009,
+    "triton_jagged_b1024": 2.238087730062906,
+    "seg_scatter_compiled": 3.4625519567970344
+   },
+   "S": 65536,
+   "d": 32,
+   "T": 1187680,
+   "lmax": 1024,
+   "pad_waste": 56.504162737437696
+  },
+  "zipf_heavy_tail": {
+   "auto": {
+    "eager": 0.06563273599999775,
+    "compile_default": 0.01708803999997599,
+    "compile_max_autotune_nocg": 0.00200635988888583,
+    "compile_reduce_overhead": 0.01717534199997317
+   },
+   "strategies": {
+    "seg_scatter": 0.0009939758333340858,
+    "bucketed_dense": 0.0038649970000051324,
+    "triton_jagged_b16": 0.0004958872571445941,
+    "triton_jagged_b128": 0.0001801137023819809,
+    "triton_jagged_b1024": 0.00025343868253999277,
+    "seg_scatter_compiled": 0.000698709708335817
+   },
+   "errors": {},
+   "best_auto": "compile_max_autotune_nocg",
+   "best_auto_s": 0.00200635988888583,
+   "best_strategy": "triton_jagged_b128",
+   "headroom": 11.139407287463278,
+   "speedup_vs_auto": {
+    "seg_scatter": 2.018519788510262,
+    "bucketed_dense": 0.5191103353723602,
+    "triton_jagged_b16": 4.046000093728567,
+    "triton_jagged_b128": 11.139407287463278,
+    "triton_jagged_b1024": 7.916549552648599,
+    "seg_scatter_compiled": 2.8715214128977355
+   },
+   "S": 16384,
+   "d": 32,
+   "T": 794704,
+   "lmax": 4096,
+   "pad_waste": 84.44510660572993
+  }
+ },
+ "regime_regret": {
+  "tiny4_outliers256_p001": {
+   "tiny4_outliers256_p001": 1.0,
+   "tiny4_outliers1024_p0005": 1.0,
+   "tiny2_outliers128_d8": 1.0,
+   "small16_outliers1024": 2.3116401395661206,
+   "zipf_heavy_tail": 3.8792701448888653
+  },
+  "tiny4_outliers1024_p0005": {
+   "tiny4_outliers256_p001": 1.0,
+   "tiny4_outliers1024_p0005": 1.0,
+   "tiny2_outliers128_d8": 1.0,
+   "small16_outliers1024": 2.3116401395661206,
+   "zipf_heavy_tail": 3.8792701448888653
+  },
+  "tiny2_outliers128_d8": {
+   "tiny4_outliers256_p001": 1.0,
+   "tiny4_outliers1024_p0005": 1.0,
+   "tiny2_outliers128_d8": 1.0,
+   "small16_outliers1024": 2.3116401395661206,
+   "zipf_heavy_tail": 3.8792701448888653
+  },
+  "small16_outliers1024": {
+   "tiny4_outliers256_p001": 1.3837715717867756,
+   "tiny4_outliers1024_p0005": 1.3780459214325746,
+   "tiny2_outliers128_d8": 3.033220061764907,
+   "small16_outliers1024": 1.0,
+   "zipf_heavy_tail": 2.753190071530083
+  },
+  "zipf_heavy_tail": {
+   "tiny4_outliers256_p001": 2.842014868800261,
+   "tiny4_outliers1024_p0005": 2.584785562296633,
+   "tiny2_outliers128_d8": 6.762826170314954,
+   "small16_outliers1024": 1.3327751372435437,
+   "zipf_heavy_tail": 1.0
+  }
+ }
+}

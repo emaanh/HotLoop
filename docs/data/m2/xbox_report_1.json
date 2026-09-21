@@ -1,0 +1,433 @@
+{
+ "honest_triton": {
+  "schema_version": 1,
+  "task_id": "gpu-toy-rowreduce-0001",
+  "task_hash": "9863b239a7134723b95b164e470e1e60eca42998bfe13c8a797bca3369ed983f",
+  "submission_hash": null,
+  "evaluator_version": "0.0.1",
+  "status": "ok",
+  "score": 1.0530571721871547,
+  "entries": [
+   {
+    "entry": "wide",
+    "weight": 1.0,
+    "correctness": {
+     "passed": true,
+     "n_trials": 5,
+     "max_abs_err": 0.0009765625,
+     "max_rel_err": 2.3837686333234645e-07,
+     "failure": null
+    },
+    "baselines": {
+     "eager": {
+      "n": 5,
+      "median_s": 0.000924011500003985,
+      "iqr_s": 1.6998000006651637e-05,
+      "mean_s": 0.0009435921000061853,
+      "min_s": 0.0009046905000076322
+     },
+     "compile_default": {
+      "n": 18,
+      "median_s": 5.924948407639723e-05,
+      "iqr_s": 1.030686305673176e-06,
+      "mean_s": 5.9798688251952126e-05,
+      "min_s": 5.897788216573682e-05
+     }
+    },
+    "best_baseline": "compile_default",
+    "candidate": {
+     "n": 18,
+     "median_s": 5.6243773885299495e-05,
+     "iqr_s": 3.9747452231192975e-07,
+     "mean_s": 5.630630537863348e-05,
+     "min_s": 5.559125159230812e-05
+    },
+    "speedup": {
+     "point": 1.0530571721871547,
+     "lo": 1.0496372636108007,
+     "hi": 1.0688069857798173,
+     "level": 0.95
+    },
+    "peak_memory_bytes": 2605056
+   }
+  ],
+  "flags": [],
+  "env": {
+   "gpu_name": "NVIDIA A100-SXM4-40GB",
+   "gpu_uuid": "GPU-ab7541b6-6716-a872-b81c-9de15c0bcac0",
+   "vbios": "92.00.45.00.03",
+   "driver": "570.148.08",
+   "cuda": "12.8",
+   "torch": "2.11.0+cu128",
+   "triton": "3.6.0",
+   "python": "3.12.14",
+   "cpu_model": "AMD EPYC 7J13 64-Core Processor",
+   "image": null,
+   "provider": "lambda",
+   "ecc": true,
+   "gpu_before": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 33,
+    "throttle_reasons": []
+   },
+   "gpu_after": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 35,
+    "throttle_reasons": []
+   }
+  },
+  "eval_seed": 6961975813324431159,
+  "build_seconds": 0.05870315199999254,
+  "eval_seconds": 14.048955163999977,
+  "error": null
+ },
+ "side_stream": {
+  "schema_version": 1,
+  "task_id": "gpu-toy-rowreduce-0001",
+  "task_hash": "9863b239a7134723b95b164e470e1e60eca42998bfe13c8a797bca3369ed983f",
+  "submission_hash": null,
+  "evaluator_version": "0.0.1",
+  "status": "ok",
+  "score": 0.8649883192240494,
+  "entries": [
+   {
+    "entry": "wide",
+    "weight": 1.0,
+    "correctness": {
+     "passed": true,
+     "n_trials": 5,
+     "max_abs_err": 0.0009765625,
+     "max_rel_err": 2.3829966516514047e-07,
+     "failure": null
+    },
+    "baselines": {
+     "eager": {
+      "n": 5,
+      "median_s": 0.0009360014999941768,
+      "iqr_s": 1.6582000000653352e-05,
+      "mean_s": 0.0009460539000059498,
+      "min_s": 0.000919221500012668
+     },
+     "compile_default": {
+      "n": 29,
+      "median_s": 5.965064012749515e-05,
+      "iqr_s": 2.1311974523779314e-06,
+      "mean_s": 6.17255327257696e-05,
+      "min_s": 5.856457006361678e-05
+     }
+    },
+    "best_baseline": "compile_default",
+    "candidate": {
+     "n": 29,
+     "median_s": 6.950869745243248e-05,
+     "iqr_s": 2.012146496911831e-06,
+     "mean_s": 6.98986992093974e-05,
+     "min_s": 6.71034872612484e-05
+    },
+    "speedup": {
+     "point": 0.8649883192240494,
+     "lo": 0.8544543607781495,
+     "hi": 0.8704044710534617,
+     "level": 0.95
+    },
+    "peak_memory_bytes": 2605056
+   }
+  ],
+  "flags": [],
+  "env": {
+   "gpu_name": "NVIDIA A100-SXM4-40GB",
+   "gpu_uuid": "GPU-ab7541b6-6716-a872-b81c-9de15c0bcac0",
+   "vbios": "92.00.45.00.03",
+   "driver": "570.148.08",
+   "cuda": "12.8",
+   "torch": "2.11.0+cu128",
+   "triton": "3.6.0",
+   "python": "3.12.14",
+   "cpu_model": "AMD EPYC 7J13 64-Core Processor",
+   "image": null,
+   "provider": "lambda",
+   "ecc": true,
+   "gpu_before": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 35,
+    "throttle_reasons": []
+   },
+   "gpu_after": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 36,
+    "throttle_reasons": []
+   }
+  },
+  "eval_seed": 3385863807943411322,
+  "build_seconds": 0.21567455499999255,
+  "eval_seconds": 9.727780316000008,
+  "error": null
+ },
+ "no_sync": {
+  "schema_version": 1,
+  "task_id": "gpu-toy-rowreduce-0001",
+  "task_hash": "9863b239a7134723b95b164e470e1e60eca42998bfe13c8a797bca3369ed983f",
+  "submission_hash": null,
+  "evaluator_version": "0.0.1",
+  "status": "flagged",
+  "score": 0.0,
+  "entries": [
+   {
+    "entry": "wide",
+    "weight": 1.0,
+    "correctness": {
+     "passed": true,
+     "n_trials": 5,
+     "max_abs_err": 0.0009765625,
+     "max_rel_err": 2.3786524505710075e-07,
+     "failure": null
+    },
+    "baselines": {
+     "eager": {
+      "n": 5,
+      "median_s": 0.0009298010000264867,
+      "iqr_s": 1.2670999979036424e-05,
+      "mean_s": 0.0009378300000122408,
+      "min_s": 0.0009103110000268089
+     },
+     "compile_default": {
+      "n": 8,
+      "median_s": 5.8195353503174806e-05,
+      "iqr_s": 4.3058598727034565e-07,
+      "mean_s": 5.871724283441612e-05,
+      "min_s": 5.798684713375058e-05
+     }
+    },
+    "best_baseline": "compile_default",
+    "candidate": {
+     "n": 8,
+     "median_s": 5.574010191095506e-05,
+     "iqr_s": 8.97961783062387e-08,
+     "mean_s": 5.5747521496908475e-05,
+     "min_s": 5.563373248409187e-05
+    },
+    "speedup": {
+     "point": 1.0450002062958355,
+     "lo": 1.0425502702308866,
+     "hi": 1.0525839300164865,
+     "level": 0.95
+    },
+    "peak_memory_bytes": 2605056
+   }
+  ],
+  "flags": [
+   {
+    "code": "sync_tampered",
+    "detail": "device synchronise rebound",
+    "fatal": true
+   }
+  ],
+  "env": {
+   "gpu_name": "NVIDIA A100-SXM4-40GB",
+   "gpu_uuid": "GPU-ab7541b6-6716-a872-b81c-9de15c0bcac0",
+   "vbios": "92.00.45.00.03",
+   "driver": "570.148.08",
+   "cuda": "12.8",
+   "torch": "2.11.0+cu128",
+   "triton": "3.6.0",
+   "python": "3.12.14",
+   "cpu_model": "AMD EPYC 7J13 64-Core Processor",
+   "image": null,
+   "provider": "lambda",
+   "ecc": true,
+   "gpu_before": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 35,
+    "throttle_reasons": []
+   },
+   "gpu_after": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 35,
+    "throttle_reasons": []
+   }
+  },
+  "eval_seed": 6999895387596687791,
+  "build_seconds": 0.05998012099999528,
+  "eval_seconds": 6.140829097000022,
+  "error": null
+ },
+ "eager_copy": {
+  "schema_version": 1,
+  "task_id": "gpu-toy-rowreduce-0001",
+  "task_hash": "9863b239a7134723b95b164e470e1e60eca42998bfe13c8a797bca3369ed983f",
+  "submission_hash": null,
+  "evaluator_version": "0.0.1",
+  "status": "ok",
+  "score": 0.1252580106349201,
+  "entries": [
+   {
+    "entry": "wide",
+    "weight": 1.0,
+    "correctness": {
+     "passed": true,
+     "n_trials": 5,
+     "max_abs_err": 0.0,
+     "max_rel_err": 0.0,
+     "failure": null
+    },
+    "baselines": {
+     "eager": {
+      "n": 5,
+      "median_s": 0.0009201459999985673,
+      "iqr_s": 1.6171999988046082e-05,
+      "mean_s": 0.00093163379999055,
+      "min_s": 0.0009113849999948798
+     },
+     "compile_default": {
+      "n": 8,
+      "median_s": 5.918116560506414e-05,
+      "iqr_s": 8.467547771288302e-07,
+      "mean_s": 5.969398566875477e-05,
+      "min_s": 5.8994280254647625e-05
+     }
+    },
+    "best_baseline": "compile_default",
+    "candidate": {
+     "n": 8,
+     "median_s": 0.0004722523184712048,
+     "iqr_s": 1.4077070072110584e-07,
+     "mean_s": 0.0004723374203820819,
+     "min_s": 0.000472172528662497
+    },
+    "speedup": {
+     "point": 0.1252580106349201,
+     "lo": 0.12495618843506334,
+     "hi": 0.12719902847398787,
+     "level": 0.95
+    },
+    "peak_memory_bytes": 136822784
+   }
+  ],
+  "flags": [],
+  "env": {
+   "gpu_name": "NVIDIA A100-SXM4-40GB",
+   "gpu_uuid": "GPU-ab7541b6-6716-a872-b81c-9de15c0bcac0",
+   "vbios": "92.00.45.00.03",
+   "driver": "570.148.08",
+   "cuda": "12.8",
+   "torch": "2.11.0+cu128",
+   "triton": "3.6.0",
+   "python": "3.12.14",
+   "cpu_model": "AMD EPYC 7J13 64-Core Processor",
+   "image": null,
+   "provider": "lambda",
+   "ecc": true,
+   "gpu_before": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 35,
+    "throttle_reasons": []
+   },
+   "gpu_after": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 37,
+    "throttle_reasons": []
+   }
+  },
+  "eval_seed": 3586209214678955406,
+  "build_seconds": 0.0007911090000050081,
+  "eval_seconds": 6.256388376000018,
+  "error": null
+ },
+ "honest_triton_worker_never_syncs": {
+  "schema_version": 1,
+  "task_id": "gpu-toy-rowreduce-0001",
+  "task_hash": "9863b239a7134723b95b164e470e1e60eca42998bfe13c8a797bca3369ed983f",
+  "submission_hash": null,
+  "evaluator_version": "0.0.1",
+  "status": "incorrect",
+  "score": 0.0,
+  "entries": [
+   {
+    "entry": "wide",
+    "weight": 1.0,
+    "correctness": {
+     "passed": false,
+     "n_trials": 6,
+     "max_abs_err": 0.0009765625,
+     "max_rel_err": 2.3835754489821895e-07,
+     "failure": "timed-phase output wrong: output[0]: NaN pattern differs from reference"
+    },
+    "baselines": {
+     "eager": {
+      "n": 5,
+      "median_s": 0.0007130814999953827,
+      "iqr_s": 3.8089999918611284e-06,
+      "mean_s": 0.00071308850000662,
+      "min_s": 0.0007097305000201004
+     },
+     "compile_default": {
+      "n": 5,
+      "median_s": 0.00034837350001737377,
+      "iqr_s": 1.2760000032585594e-05,
+      "mean_s": 0.0003574781000082794,
+      "min_s": 0.00034643150000590595
+     }
+    },
+    "best_baseline": "compile_default",
+    "candidate": null,
+    "speedup": null,
+    "peak_memory_bytes": null
+   }
+  ],
+  "flags": [
+   {
+    "code": "timed_phase_mismatch",
+    "detail": "wide",
+    "fatal": true
+   }
+  ],
+  "env": {
+   "gpu_name": "NVIDIA A100-SXM4-40GB",
+   "gpu_uuid": "GPU-ab7541b6-6716-a872-b81c-9de15c0bcac0",
+   "vbios": "92.00.45.00.03",
+   "driver": "570.148.08",
+   "cuda": "12.8",
+   "torch": "2.11.0+cu128",
+   "triton": "3.6.0",
+   "python": "3.12.14",
+   "cpu_model": "AMD EPYC 7J13 64-Core Processor",
+   "image": null,
+   "provider": "lambda",
+   "ecc": true,
+   "gpu_before": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 36,
+    "throttle_reasons": []
+   },
+   "gpu_after": {
+    "clocks_locked": true,
+    "sm_clock_mhz": 1410,
+    "mem_clock_mhz": 1215,
+    "temperature_c": 35,
+    "throttle_reasons": []
+   }
+  },
+  "eval_seed": 329978672282269291,
+  "build_seconds": 0.05859840899998403,
+  "eval_seconds": 5.056666225000015,
+  "error": null
+ }
+}
