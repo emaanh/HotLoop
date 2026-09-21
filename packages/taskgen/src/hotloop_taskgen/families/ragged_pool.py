@@ -29,7 +29,7 @@ REGIMES: dict[str, dict] = {
         S=262144, D=32, dist={"kind": "bimodal", "p_long": 0.001, "long": 256, "short": 4}
     ),
     "tiny_rare_long_outliers": dict(
-        S=262144, D=16, dist={"kind": "bimodal", "p_long": 0.0005, "long": 1024, "short": 4}
+        S=262144, D=16, dist={"kind": "bimodal", "p_long": 0.001, "long": 512, "short": 4}
     ),
     "small_outliers": dict(
         S=65536, D=32, dist={"kind": "bimodal", "p_long": 0.002, "long": 1024, "short": 16}

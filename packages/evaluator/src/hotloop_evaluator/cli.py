@@ -50,12 +50,24 @@ def main(argv: list[str] | None = None) -> int:
         "--seed", type=int, default=None, help="fix the base seed (public/self-check mode)"
     )
     p.add_argument("--quick", action="store_true", help="fewer pairs; for the agent's own checks")
+    p.add_argument("--rel-halfwidth", type=float, default=None, help="CI target, e.g. 0.02")
+    p.add_argument("--max-pairs", type=int, default=None)
+    p.add_argument("--max-calls", type=int, default=None, help="cap on calls per timed block")
     args = p.parse_args(argv)
 
     cfg = EvalConfig(device=args.device, seed=args.seed)
     if args.quick:
         cfg.correctness_trials = 2
         cfg.stopping = type(cfg.stopping)(target_rel_halfwidth=0.03, min_pairs=5, max_pairs=30)
+    if args.rel_halfwidth or args.max_pairs:
+        s = cfg.stopping
+        cfg.stopping = type(s)(
+            target_rel_halfwidth=args.rel_halfwidth or s.target_rel_halfwidth,
+            min_pairs=min(s.min_pairs, args.max_pairs or s.max_pairs),
+            max_pairs=args.max_pairs or s.max_pairs,
+        )
+    if args.max_calls:
+        cfg.max_calls_per_block = args.max_calls
     result = evaluate(args.task, args.submission, cfg)
     text = result.model_dump_json(indent=2)
     if args.out:

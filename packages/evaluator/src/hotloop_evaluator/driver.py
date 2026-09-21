@@ -165,7 +165,8 @@ def _poison(buf: torch.Tensor) -> None:
 
 def _default_pool_bytes(device: str) -> int:
     if device.startswith("cuda"):
-        return int(torch.cuda.get_device_properties(0).total_memory * 0.25)
+        # the padded references of some tasks need >10 GiB themselves; leave them room
+        return int(torch.cuda.get_device_properties(0).total_memory * 0.15)
     return 1 << 30
 
 
