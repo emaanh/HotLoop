@@ -75,7 +75,7 @@ def trajectory_metrics(path: Path) -> dict:
             + usage["cached_tokens"] * PRICE["cached"]
             + usage["output_tokens"] * PRICE["output"],
             2,
-        ),  # fmt: skip
+        ),
         "end": next(
             (
                 e["payload"].get("reason") or e["payload"].get("limit")
@@ -83,7 +83,7 @@ def trajectory_metrics(path: Path) -> dict:
                 if e["type"] in ("run_end", "budget")
             ),
             "?",
-        ),  # fmt: skip
+        ),
     }
 
 
@@ -113,7 +113,7 @@ def main() -> int:
                     if r["status"] != "ok" and (r["error"] or r["entries"])
                 ),
                 None,
-            ),  # fmt: skip
+            ),
             **trajectory_metrics(d / "trajectory.jsonl"),
         }
         per_task[s["task"]].append(run)
