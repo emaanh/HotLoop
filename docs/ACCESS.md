@@ -79,6 +79,10 @@ primary bench SKU (D-14); multi-GPU nodes give no per-GPU discount.
 5. CPU model / PCIe topology consistency across Lambda VMs of the same instance type.
 6. Boot-to-ready time and how often the instance type is actually available.
 
+## Persistent storage
+
+Lambda filesystem `hotloop-results` (us-east-1, mounts at `/lambda/nfs/hotloop-results`): batch results synced from the controller. Billed per GB stored (pennies). Delete when no longer needed.
+
 ## Spend log
 
 | Date | Provider | What | $ |
@@ -88,6 +92,8 @@ primary bench SKU (D-14); multi-GPU nodes give no per-GPU discount.
 | 2026-09-21 | Lambda | `hotloop-m2-certify` 00:50Z–03:48Z (178 min): certification, M3 plumbing, pilot, batch host #1. **Terminated.** | 5.90 |
 | 2026-09-21 | Lambda | `hotloop-m3-2/-3/-4` 02:14Z–03:48Z (94 min each): first M3 batch, cut short by OpenAI quota. **Terminated.** | 9.39 |
 | 2026-09-21 | Lambda | `hotloop-batch-0/-2/-3` 04:00Z–20:37Z (16.6 h each): second M3 batch. **~12 h of this was the operator laptop asleep with instances billing (D-30).** Terminated by hand. | 99.14 |
-| | | **GPU total to date** (from `~/.hotloop/vm_ledger.jsonl`; all instances terminated) | **115.81** |
+| 2026-09-21 | Lambda | dead-man drill: `hotloop-controller` A10, ~8 min, self-terminated | ≈0.17 |
+| 2026-09-21 | Lambda | `hotloop-controller` (A10) + `hotloop-batch-0..3` (A100) launched 21:00Z–21:10Z from the controller: remaining 23 trajectories. Self-terminating: deadline 5 h, dead-man 6 h (03:04Z). Bench hosts are launched by the controller and do **not** appear in the local ledger — **LIVE** | ≈9.25/h |
+| | | **GPU total to date** (from `~/.hotloop/vm_ledger.jsonl`; terminated instances in the local ledger only) | **115.81** |
 | 2026-09-21 | OpenAI | second batch ≈ $12 more at litellm list prices (unverified) | ≈12 |
 | 2026-09-21 | OpenAI | pilot + first batch ≈ $14 at litellm list prices (unverified); account hit `insufficient_quota`; Emaan topped up | ≈14 |

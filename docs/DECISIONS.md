@@ -326,3 +326,21 @@ leave instances up across a turn boundary without saying so explicitly with the 
 **Lesson.** I tested the happy path of the safeguard (it terminates at the end) and never the
 failure it existed for (operator machine goes away). A safeguard is untested until its trigger
 condition has been exercised.
+
+## D-31 · Unattended batches run from a controller VM; the dead-man was drilled before use — accepted · 2026-09-21
+**Chosen by Emaan** among the D-30 options. `scripts/controller.py`:
+- A separate always-on instance (today a Lambda `gpu_1x_a10`, $1.29/h, because Lambda's $0.20/h CPU
+  types have no capacity; a CPU VM on another provider would be the cheap long-term answer) holds
+  the OpenAI and Lambda keys and runs `run_batch.py`. It generates its own SSH key and launches the
+  bench hosts with it. **Bench hosts — where untrusted agents have a shell — still never see a
+  key**, so D-20/D-25's trust boundary is unchanged. The operator laptop is out of the loop.
+- Three independent stops: batch `finally`; batch wall-clock deadline; a separate **dead-man
+  process** that at a hard cap saves results and runs `terminate-all` (controller included).
+- Results sync every 5 min to a persistent Lambda filesystem (`hotloop-results`, us-east-1), so
+  they outlive every instance.
+- **Drilled first (D-30's lesson):** controller up with no batch and a 3-minute cap → at the cap it
+  terminated itself with no action from the laptop; account went to zero instances. Cost ≈ $0.15.
+- Bounded worst case for today's run: 6 h × (4 × $1.99 + $1.29) ≈ $55.
+**Residual risks.** The controller is a single point: if Lambda's API is down at the cap, the
+dead-man retries 5× over 2.5 min and then gives up (should loop longer). A leaked controller would
+expose both keys — it is short-lived, reachable only by SSH key, and never runs untrusted code.
