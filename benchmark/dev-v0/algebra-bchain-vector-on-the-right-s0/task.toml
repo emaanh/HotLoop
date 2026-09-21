@@ -1,0 +1,32 @@
+schema_version = 1
+id = "algebra-bchain-vector-on-the-right-s0"
+title = "Matmul chain (bchain vector on the right)"
+content_hash = "2a8b8ccc6ebb9703eb48e54af2c94e0f5b9fc979e2024f84cb973b0ff0eb87cc"
+baselines = ["eager", "compile_default", "compile_max_autotune_no_cudagraphs", "compile_reduce_overhead"]
+
+[provenance]
+generator_version = "0.1.0"
+family = "algebra"
+seed = 0
+sibling_group = "algebra-bchain-v1"
+family_params = { regime = "bchain_vector_on_the_right", control = false, member = "bchain", batch = 64, dims = [512, 512, 512, 512, 1] }
+
+[hardware]
+gpu_sku = "A100-SXM4-40GB"
+image = "unpinned"
+
+[[workload]]
+name = "main"
+weight = 1.0
+
+[outputs]
+n_outputs = 1
+[[outputs.tolerances]]
+rtol = 2.687890931157899e-05
+atol = 3.1678709476906434e-05
+
+[budget]
+max_turns = 100
+max_total_tokens = 1500000
+gpu_seconds = 1800.0
+wall_seconds = 5400.0

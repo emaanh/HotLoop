@@ -1,0 +1,32 @@
+schema_version = 1
+id = "algebra-chain-tall-skinny-s0"
+title = "Matmul chain (chain tall skinny)"
+content_hash = "c538b26e0ec8c33c8767e67e681882e626c7eae9a796ad8f314ab9e43b556202"
+baselines = ["eager", "compile_default", "compile_max_autotune_no_cudagraphs", "compile_reduce_overhead"]
+
+[provenance]
+generator_version = "0.1.0"
+family = "algebra"
+seed = 0
+sibling_group = "algebra-chain-v1"
+family_params = { regime = "chain_tall_skinny", control = false, member = "chain", dims = [8192, 128, 4096, 128, 2048] }
+
+[hardware]
+gpu_sku = "A100-SXM4-40GB"
+image = "unpinned"
+
+[[workload]]
+name = "main"
+weight = 1.0
+
+[outputs]
+n_outputs = 1
+[[outputs.tolerances]]
+rtol = 2.6441507073960494e-05
+atol = 1e-05
+
+[budget]
+max_turns = 100
+max_total_tokens = 1500000
+gpu_seconds = 1800.0
+wall_seconds = 5400.0

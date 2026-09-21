@@ -1,0 +1,32 @@
+schema_version = 1
+id = "ragged-pool-uniform-len64-s0"
+title = "Ragged softmax-pooling (uniform len64)"
+content_hash = "01f472325dd6dd856e75ce0ceeaa6b731c2bf9aa31757606bbbc68c345e3d9eb"
+baselines = ["eager", "compile_default", "compile_max_autotune_no_cudagraphs", "compile_reduce_overhead"]
+
+[provenance]
+generator_version = "0.1.0"
+family = "ragged_pool"
+seed = 0
+sibling_group = "ragged_pool-v1"
+family_params = { regime = "uniform_len64", control = true, S = 16384, T = 1048576, D = 32, lmax = 64, dist = { kind = "uniform", len = 64 }, pad_waste = 1.0 }
+
+[hardware]
+gpu_sku = "A100-SXM4-40GB"
+image = "unpinned"
+
+[[workload]]
+name = "main"
+weight = 1.0
+
+[outputs]
+n_outputs = 1
+[[outputs.tolerances]]
+rtol = 0.015509912500343948
+atol = 0.005405036745955039
+
+[budget]
+max_turns = 100
+max_total_tokens = 1500000
+gpu_seconds = 1800.0
+wall_seconds = 5400.0

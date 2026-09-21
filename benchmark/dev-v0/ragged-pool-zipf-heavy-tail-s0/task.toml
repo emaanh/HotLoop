@@ -1,0 +1,32 @@
+schema_version = 1
+id = "ragged-pool-zipf-heavy-tail-s0"
+title = "Ragged softmax-pooling (zipf heavy tail)"
+content_hash = "7c0571f0c3ca03c14d754c0cca307832fd600357a88124c4d4c286fc0c214986"
+baselines = ["eager", "compile_default", "compile_max_autotune_no_cudagraphs", "compile_reduce_overhead"]
+
+[provenance]
+generator_version = "0.1.0"
+family = "ragged_pool"
+seed = 0
+sibling_group = "ragged_pool-v1"
+family_params = { regime = "zipf_heavy_tail", control = false, S = 16384, T = 732301, D = 32, lmax = 4096, dist = { kind = "zipf", min = 8, alpha = 1.1, max = 4096 }, pad_waste = 91.64 }
+
+[hardware]
+gpu_sku = "A100-SXM4-40GB"
+image = "unpinned"
+
+[[workload]]
+name = "main"
+weight = 1.0
+
+[outputs]
+n_outputs = 1
+[[outputs.tolerances]]
+rtol = 0.016262244590822005
+atol = 0.012244653790446978
+
+[budget]
+max_turns = 100
+max_total_tokens = 1500000
+gpu_seconds = 1800.0
+wall_seconds = 5400.0

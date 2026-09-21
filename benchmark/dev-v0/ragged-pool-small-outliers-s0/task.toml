@@ -1,0 +1,32 @@
+schema_version = 1
+id = "ragged-pool-small-outliers-s0"
+title = "Ragged softmax-pooling (small outliers)"
+content_hash = "2d44a744aa8c53053f09e9fbaf9949e1caa2c665c5974d62728edb00064fab9d"
+baselines = ["eager", "compile_default", "compile_max_autotune_no_cudagraphs", "compile_reduce_overhead"]
+
+[provenance]
+generator_version = "0.1.0"
+family = "ragged_pool"
+seed = 0
+sibling_group = "ragged_pool-v1"
+family_params = { regime = "small_outliers", control = false, S = 65536, T = 1187680, D = 32, lmax = 1024, dist = { kind = "bimodal", p_long = 0.002, long = 1024, short = 16 }, pad_waste = 56.5 }
+
+[hardware]
+gpu_sku = "A100-SXM4-40GB"
+image = "unpinned"
+
+[[workload]]
+name = "main"
+weight = 1.0
+
+[outputs]
+n_outputs = 1
+[[outputs.tolerances]]
+rtol = 0.015410832829789608
+atol = 0.010687125531842574
+
+[budget]
+max_turns = 100
+max_total_tokens = 1500000
+gpu_seconds = 1800.0
+wall_seconds = 5400.0

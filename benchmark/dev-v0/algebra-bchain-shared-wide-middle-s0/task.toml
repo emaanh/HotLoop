@@ -1,0 +1,32 @@
+schema_version = 1
+id = "algebra-bchain-shared-wide-middle-s0"
+title = "Matmul chain (bchain shared wide middle)"
+content_hash = "e2117a39fd8bb34a468a8fb477729a7c8e2abc2bf5bbe1fd54d60dce46ab8d9d"
+baselines = ["eager", "compile_default", "compile_max_autotune_no_cudagraphs", "compile_reduce_overhead"]
+
+[provenance]
+generator_version = "0.1.0"
+family = "algebra"
+seed = 0
+sibling_group = "algebra-bchain-v1"
+family_params = { regime = "bchain_shared_wide_middle", control = false, member = "bchain", batch = 64, dims = [256, 64, 2048, 64, 256] }
+
+[hardware]
+gpu_sku = "A100-SXM4-40GB"
+image = "unpinned"
+
+[[workload]]
+name = "main"
+weight = 1.0
+
+[outputs]
+n_outputs = 1
+[[outputs.tolerances]]
+rtol = 2.085424149740013e-05
+atol = 1e-05
+
+[budget]
+max_turns = 100
+max_total_tokens = 1500000
+gpu_seconds = 1800.0
+wall_seconds = 5400.0

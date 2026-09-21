@@ -13,4 +13,3 @@ trajectories/
 # hidden benchmark material (reference strategies, eval seeds, certification data) — never public, see D-16
 private/
 runs/
-tasks/
