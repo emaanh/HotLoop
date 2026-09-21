@@ -293,8 +293,26 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
         )["median_s"]
 
         def per_call(worker, fn, n_blocks, slots=slots, overhead=overhead):
+            """Per-call time from **back-to-back** blocks.
+
+            A single call after an idle gap is slow for everything and slower for compiled code
+            (measured: 163 us back-to-back vs 346/443 us eager/compiled with 3 ms gaps), so
+            probing with isolated calls mis-ranks baselines - it once made torch.compile look
+            6.7x slower than eager when the two were equal. Size the block from one throwaway
+            call, then time blocks of k calls. The submission keeps every output alive, so its
+            block is capped to bound memory.
+            """
+            once = max(
+                worker.timed_block(fn, [0], cfg.call_timeout_s, [0], slots)[0] - overhead, 1e-7
+            )
+            k = max(1, min(256 if worker is ref else 16, math.ceil(0.02 / once)))
             return [
-                max(worker.timed_block(fn, [0], cfg.call_timeout_s, [0], slots)[0] - overhead, 1e-9)
+                max(
+                    worker.timed_block(fn, [0] * k, cfg.call_timeout_s, [k - 1], slots)[0]
+                    - overhead,
+                    1e-9,
+                )
+                / k
                 for _ in range(n_blocks)
             ]
 

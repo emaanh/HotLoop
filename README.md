@@ -15,6 +15,7 @@ Status: planning (2026-09-20). No code yet.
 | [docs/DESIGN.md](docs/DESIGN.md) | Thesis, task formulation, generator, transfer matrices, architecture, MVP |
 | [docs/EVAL.md](docs/EVAL.md) | Correctness, timing protocol, anti-cheat |
 | [docs/ECOSYSTEM.md](docs/ECOSYSTEM.md) | Survey of related work and what we reuse |
+| [docs/COMPILER_GAPS.md](docs/COMPILER_GAPS.md) | Tasks as located gaps in compiler capability; families to build next |
 | [docs/QUANT_STUDY.md](docs/QUANT_STUDY.md) | Quantization study design, model + arms |
 | [docs/PLAN.md](docs/PLAN.md) | Milestones, gates, kill criteria, risks |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Append-only decision log |

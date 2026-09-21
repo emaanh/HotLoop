@@ -344,3 +344,38 @@ condition has been exercised.
 **Residual risks.** The controller is a single point: if Lambda's API is down at the cap, the
 dead-man retries 5× over 2.5 min and then gives up (should loop longer). A leaked controller would
 expose both keys — it is short-lived, reachable only by SSH key, and never runs untrusted code.
+
+## D-32 · "torch.compile slower than eager" was our probe, not PyTorch; baseline probe now times back-to-back blocks — accepted · 2026-09-21
+**Trigger.** Emaan asked about the oddity that compile looked slower than eager on a control task,
+and whether anything should go upstream.
+**Investigation** (`scripts/repro_compile_overhead.py`, standalone, no HotLoop code, A10, torch
+2.11+cu128): eager vs `torch.compile` = **1.00** with the same tensors, with fresh tensors every
+call, and with tensors shared over CUDA IPC. With **single calls separated by idle gaps**, eager
+346 µs vs compiled 443 µs against 163/164 µs back-to-back. Our evaluator probed non-best baselines
+exactly that way, producing the recorded 90 vs 603 µs (A100).
+**Conclusions.** (1) Not a PyTorch bug; nothing to report. (2) The lazy-`torch.compile` *score* of
+0.64–0.73 on that control is a proper paired measurement and is real but mundane: at ~90 µs/call
+the program is launch-bound and dynamo's per-call guard cost shows. (3) **Scores are unaffected**:
+they use the best baseline measured in paired back-to-back blocks; the probe only *selects* it,
+and for all 12 dev-v0 tasks the selection was right (gaps huge or exact ties). (4) It was still a
+latent bug — a narrowly-better compiled baseline could lose selection and inflate a score — so the
+probe now sizes a block from one throwaway call and times back-to-back blocks.
+**Caveat.** The per-baseline timings stored in existing result files for *non-best* baselines are
+probe numbers and should not be quoted. The running batch uses the old image; its scores stand for
+the reason in (3). GPU re-verification of the new probe is owed.
+
+## D-33 · Tasks are organised by *compiler gap*; results should be usable by compiler researchers — accepted · 2026-09-21
+**Direction from Emaan:** design tests that stretch kernel optimisation beyond what compilers can
+do, such that research here can improve compilers. Full design: COMPILER_GAPS.md.
+**Decisions.** Each family declares a `gap_class` (G1 numerical contract, G2 data distribution,
+G3 algorithm substitution, G4 cross-op layout, G5 host–device orchestration, G6 regime-dependent
+tuning, G7 global cost model). References must be patterns that occur in real code. The lazy
+battery must include the ecosystem's own one-liner where it exists (add: nested/jagged tensors for
+ragged data). Winning solutions are classified closable-by-rule / needs-numerical-contract /
+needs-distribution-knowledge / new-algorithm and kept as a rewrite corpus. Report fraction of the
+roofline bound beside speedup-over-compiler. Next families target the uncovered gaps (G3, G5):
+streaming pairwise, linear recurrence, multi-tensor update, skewed dispatch, hot-row gather,
+structured algebra, Level-2 compositions.
+**Why.** It turns "agent beat the compiler by 17×" from a curiosity into a located, costed,
+reproducible statement about what compilers can't yet do — and it is the honest reading of our
+own data: the compiler matched hand-written Triton to 5% where only codegen was at stake.

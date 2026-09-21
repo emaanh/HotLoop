@@ -22,6 +22,7 @@ import torch
 from hotloop_taskgen.core import TaskDraft
 
 FAMILY = "ragged_pool"
+GAP_CLASS = "G2"  # COMPILER_GAPS.md: data distribution (secondary: G4 layout, G6 tuning)
 
 REGIMES: dict[str, dict] = {
     # --- headroom regimes -------------------------------------------------------------------

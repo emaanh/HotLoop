@@ -17,6 +17,7 @@ from __future__ import annotations
 from hotloop_taskgen.core import TaskDraft
 
 FAMILY = "algebra"
+GAP_CLASS = "G1"  # COMPILER_GAPS.md: numerical contract: re-association changes rounding
 
 REGIMES: dict[str, dict] = {
     "chain_lowrank_sandwich": dict(member="chain", dims=[8192, 64, 8192, 64, 16]),

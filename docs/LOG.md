@@ -2,6 +2,25 @@
 
 Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends belong here too.
 
+## 2026-09-21 (22:50Z) — "compile slower than eager" run to ground: our probe, not PyTorch (D-32)
+
+Standalone repro on the controller's idle A10 (torch 2.11+cu128), batched chain `x@w1@w2@y`,
+B=64, dims 1·512·512·512·512, median µs per call:
+
+| feeding | eager | torch.compile | ratio |
+|---|---|---|---|
+| same tensors, one process | 162.9 | 163.6 | 1.00 |
+| fresh tensors every call | 163.0 | 163.8 | 1.01 |
+| tensors via CUDA IPC (as our evaluator) | 162.8 | 163.5 | 1.00 |
+| **single calls with 3 ms idle gaps** | **346.4** | **443.5** | 1.28 |
+| (`reduce-overhead`, back-to-back, fresh addresses) | | 458.1 | 2.8 — CUDA graphs copy inputs; expected |
+
+Our baseline probe used isolated single calls → the 90 vs 603 µs in the certificates. Scores
+unaffected (paired blocks; selection was right on all 12 tasks); probe fixed. Emaan's follow-up
+question — should any of this go to PyTorch — answer: no; and it led to D-33 / COMPILER_GAPS.md.
+Owed: add nested-tensor solution to the lazy battery for ragged tasks (they may be easier than
+certified); roofline fraction in the analysis.
+
 ## 2026-09-21 (21:30Z) — Controller VM live; dead-man drilled; Lambda flaky today
 
 - Emaan chose the controller option (D-31). **Drill first:** controller up with no batch and a
