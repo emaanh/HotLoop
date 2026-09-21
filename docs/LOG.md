@@ -2,6 +2,19 @@
 
 Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends belong here too.
 
+## 2026-09-21 (20:40Z) — Second M3 batch: laptop slept overnight, $99 billed, safeguards failed (D-30)
+
+- 3 A100s up 16.6 h; ~12 h of that the operator laptop was asleep (lid closed, battery). Deadline
+  timer was monotonic → never fired. Killed the batch by hand at 13:36 local. **GPU $99.14 for this
+  batch; project GPU total $115.81.** OpenAI ≈ $26 total so far.
+- 9 trajectories tainted (6 `TimeExceeded` because sleep consumed the wall-clock budget, 3 in
+  flight at kill time) → quarantined. **13 clean trajectories** remain: r0 for 10 of 12 tasks
+  (missing: zipf-heavy-tail, tiny-rare-long-outliers; the pilot covers zipf), r1 for 3 tasks.
+- Two r1 runs (`chain-lowrank-sandwich`, `chain-tall-skinny`) contain 35–43 min event gaps from
+  brief sleeps but ended by the agent's own `submitted`; kept, flagged.
+- Open item seen in this batch: `ragged-pool-uniform-len64 r0` officially scored `error` (worker
+  traceback) after self-checks of 1.37× — needs a look before it counts as an agent failure.
+
 ## 2026-09-21 (04:10Z) — First M3 batch killed by OpenAI quota; 4 clean trajectories; safeguards added
 
 - Batch of 36 started 02:21Z on 4 A100s. OpenAI began returning `insufficient_quota` intermittently

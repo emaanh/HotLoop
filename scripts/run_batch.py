@@ -3,10 +3,13 @@
 Owns the whole lifecycle so that no instance can outlive the batch:
   * `--launch N` launches N instances, builds the image on each, and **terminates them in a
     `finally`** - on success, on crash, on Ctrl-C, and when the model becomes unreachable.
-  * `--deadline-hours H` is a hard stop: at H hours everything launched here is terminated and the
-    process exits, whatever state the batch is in.
-  * Run it under `caffeinate -i` on a laptop: the agent loop is local, a sleeping machine stalls
-    the batch while the instances keep billing.
+  * `--deadline-hours H` is a hard stop measured on the **wall clock**: at H hours everything
+    launched here is terminated and the process exits, whatever state the batch is in.
+  * The agent loop is local, so a sleeping operator machine stalls the batch while instances keep
+    billing, and nothing running on a sleeping machine can stop that. Mitigations here: refuse to
+    start on battery power; detect a sleep (a watchdog tick that arrives minutes late) and
+    terminate everything immediately on wake. `caffeinate -i` does NOT prevent lid-close sleep.
+    For unattended runs use an off-machine kill switch or an always-on controller (D-30).
 Resumable: a run directory with summary.json is skipped. Order is rep-major, so a partial batch
 still covers every task.
 
@@ -37,6 +40,16 @@ def vm(*args: str) -> str:
     return subprocess.run(
         ["hotloop-vm", *args], capture_output=True, text=True, check=True
     ).stdout.strip()
+
+
+def on_battery() -> bool:
+    try:
+        out = subprocess.run(
+            ["pmset", "-g", "batt"], capture_output=True, text=True, check=False
+        ).stdout
+    except OSError:
+        return False  # not a Mac: assume a plugged-in machine
+    return "Battery Power" in out
 
 
 def terminate_launched(why: str) -> None:
@@ -122,6 +135,7 @@ def main() -> int:
     )
     p.add_argument("--instance-type", default="gpu_1x_a100_sxm4")
     p.add_argument("--deadline-hours", type=float, default=8.0)
+    p.add_argument("--allow-battery", action="store_true")
     p.add_argument("--tasks", required=True, type=Path)
     p.add_argument("--reps", type=int, default=3)
     p.add_argument("--model", required=True)
@@ -131,14 +145,30 @@ def main() -> int:
     p.add_argument("--max-completion-tokens", type=int, default=400_000)
     a = p.parse_args()
 
-    def deadline() -> None:
-        log(f"DEADLINE of {a.deadline_hours}h reached")
-        terminate_launched("deadline")
-        os._exit(4)
+    if on_battery() and not a.allow_battery:
+        raise SystemExit("refusing to start on battery power: a sleeping laptop stalls the batch "
+                         "while instances bill (D-30). Plug in, or pass --allow-battery.")  # fmt: skip
 
-    timer = threading.Timer(a.deadline_hours * 3600, deadline)
-    timer.daemon = True
-    timer.start()
+    t_start = time.time()
+
+    def watchdog() -> None:
+        """threading.Timer counts monotonic time, which stops while the machine sleeps - that is
+        how an 8 h deadline failed to fire across a 12 h sleep. Poll the wall clock instead."""
+        last = time.time()
+        while True:
+            time.sleep(30)
+            now = time.time()
+            if now - last > 300:
+                log(f"operator machine slept for {(now - last) / 60:.0f} min")
+                terminate_launched("sleep detected")
+                os._exit(5)
+            if now - t_start > a.deadline_hours * 3600:
+                log(f"DEADLINE of {a.deadline_hours}h reached")
+                terminate_launched("deadline")
+                os._exit(4)
+            last = now
+
+    threading.Thread(target=watchdog, daemon=True).start()
     try:
         hosts = a.hosts.split(",") if a.hosts else launch_and_prepare(a.launch, a.instance_type)
         tasks = sorted(d for d in a.tasks.iterdir() if (d / "task.toml").is_file())

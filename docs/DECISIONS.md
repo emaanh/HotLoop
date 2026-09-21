@@ -300,3 +300,29 @@ ended; (3) four instances kept billing until my session was re-invoked, which is
 **Offered, not adopted:** an off-laptop kill switch (scheduled GitHub Action reaping old Lambda
 instances) — needs the Lambda key as a GitHub secret; Emaan has not approved it.
 **Lesson for me.** Check *why* a run ended before interpreting *what* it produced.
+
+## D-30 · Overnight billing incident: a sleeping operator machine defeats every local safeguard — accepted · 2026-09-21
+**What happened.** The second M3 batch started 21:00 local on 3 A100s. Around 23:45 the laptop
+(lid closed, on battery) went to sleep and stayed asleep ~12 h. The agent loop is local, so the
+batch froze; the instances billed the whole time: **$99.14 for ~5 h of useful work**. Emaan had
+asked, hours earlier, specifically about instances charging overnight. Both safeguards I had just
+added (D-29) failed in exactly this case: `caffeinate -i` does not prevent lid-close sleep, and
+the 8 h deadline was a `threading.Timer`, which counts monotonic time that *stops during sleep*.
+I found out only because Emaan asked how it was going. Collateral: 6 trajectories ended
+`TimeExceeded` because sleep ate their wall-clock budget, 3 were in flight when I killed the
+batch — all 9 quarantined in `runs/m3/_tainted_by_laptop_sleep/`. 13 clean trajectories remain.
+**Fixes made.** Wall-clock watchdog (deadline + "tick arrived >5 min late ⇒ machine slept ⇒
+terminate everything on wake"); refuse to start on battery power.
+**What these fixes cannot do.** Nothing running on a sleeping machine can terminate anything.
+Honest options for unattended runs, none adopted yet (Emaan's call):
+  (a) off-machine kill switch: scheduled GitHub Action reaping Lambda instances older than N h
+      (needs the Lambda key as a GitHub secret);
+  (b) always-on **controller** VM that runs the batch (holds OpenAI + Lambda keys; bench VMs still
+      never see a key, so D-20/D-25's trust boundary is intact) — also removes the laptop from the
+      loop entirely, which is the real fix;
+  (c) only run batches attended, plugged in, lid open.
+**Rule until one is adopted:** no batch longer than I can watch within a single session; never
+leave instances up across a turn boundary without saying so explicitly with the $/h.
+**Lesson.** I tested the happy path of the safeguard (it terminates at the end) and never the
+failure it existed for (operator machine goes away). A safeguard is untested until its trigger
+condition has been exercised.
