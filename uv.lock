@@ -180,10 +180,14 @@ version = "0.0.1"
 source = { editable = "packages/taskgen" }
 dependencies = [
     { name = "hotloop-schemas" },
+    { name = "torch" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "hotloop-schemas", editable = "packages/schemas" }]
+requires-dist = [
+    { name = "hotloop-schemas", editable = "packages/schemas" },
+    { name = "torch", specifier = ">=2.5" },
+]
 
 [[package]]
 name = "hotloop-workspace"

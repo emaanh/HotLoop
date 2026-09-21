@@ -3,7 +3,11 @@ name = "hotloop-taskgen"
 version = "0.0.1"
 description = "Procedural task generator and certification; emits immutable task packages"
 requires-python = ">=3.11,<3.13"
-dependencies = ["hotloop-schemas"]
+dependencies = ["hotloop-schemas", "torch>=2.5"]
+
+[project.scripts]
+hotloop-taskgen = "hotloop_taskgen.cli:main"
+hotloop-certify = "hotloop_taskgen.certify:main"
 
 [build-system]
 requires = ["hatchling"]

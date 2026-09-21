@@ -37,5 +37,8 @@ addopts = "-q"
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint]
+ignore = ["C408"]  # dict(...) literals read better for regime tables
+
 [tool.ruff.lint.isort]
 known-first-party = ["hotloop_schemas", "hotloop_taskgen", "hotloop_evaluator", "hotloop_runner", "hotloop_agents"]
