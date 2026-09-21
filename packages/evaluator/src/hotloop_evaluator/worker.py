@@ -117,11 +117,20 @@ def serve(conn, device: str) -> None:
             elif op == "run_block":
                 name, indices = args
                 fn = fns[name]
-                outs = []
+                # Trusted baselines may replay CUDA graphs, whose earlier outputs are overwritten by
+                # later replays, so only their last output is kept. A submission's outputs must
+                # all stay valid after later calls (ordinary PyTorch semantics): any of them may
+                # be the one that gets checked.
+                keep_all = name == "candidate"
+                outs = [None] * len(indices)
+                out = None  # empty blocks are legal: the driver uses them to measure overhead
                 guard.sync()
                 t0 = time.perf_counter()
-                for i in indices:
-                    outs.append(fn(*pool[i]))
+                for n, i in enumerate(indices):
+                    out = fn(*pool[i])
+                    if keep_all or n == len(indices) - 1:
+                        outs[n] = out
+                del out
                 guard.sync()
                 inner = time.perf_counter() - t0
                 last_outputs = outs

@@ -9,6 +9,37 @@ from pathlib import Path
 from hotloop_evaluator.driver import EvalConfig, evaluate
 
 
+def calibrate_main(argv: list[str] | None = None) -> int:
+    """hotloop-calibrate --task <task_pkg> [--seeds N]: print calibrated tolerances as JSON.
+
+    Runs the reference natively and in float64 on fresh inputs (correctness.calibrate_tolerances).
+    Taskgen calls this as a subprocess at emit time; it never imports the evaluator.
+    """
+    import json
+
+    from hotloop_evaluator.correctness import calibrate_tolerances
+    from hotloop_evaluator.driver import _load_workload
+    from hotloop_evaluator.worker import _import_from
+    from hotloop_schemas import load_task_spec
+
+    p = argparse.ArgumentParser(prog="hotloop-calibrate", description=calibrate_main.__doc__)
+    p.add_argument("--task", required=True, type=Path)
+    p.add_argument("--device", default="cuda")
+    p.add_argument("--seeds", type=int, default=4)
+    args = p.parse_args(argv)
+    spec = load_task_spec(args.task)
+    make_inputs = _load_workload(args.task)
+    reference = _import_from(args.task / "reference.py", "hotloop_reference").reference
+    out = {}
+    for entry in spec.workload:
+        sets = [
+            make_inputs(entry.name, 1_000_003 * (i + 1), args.device) for i in range(args.seeds)
+        ]
+        out[entry.name] = [t.model_dump() for t in calibrate_tolerances(reference, sets)]
+    print(json.dumps(out))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="hotloop-eval", description=__doc__)
     p.add_argument("--task", required=True, type=Path)

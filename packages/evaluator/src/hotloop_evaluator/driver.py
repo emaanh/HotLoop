@@ -334,8 +334,14 @@ def _run(spec: TaskSpec, task_dir, submission_dir, cfg, ref: Worker, cand: Worke
             take = sorted({k - 1, j})
             times, got = {}, {}
             for w, fn in order:
+                # baselines keep only their last output (see worker); the submission's random one
+                # is what gets verified, so consumption stays symmetric in the part that matters
                 outer, inner, tampered, taken = w.timed_block(
-                    fn, list(range(k)), cfg.call_timeout_s, take, slots
+                    fn,
+                    list(range(k)),
+                    cfg.call_timeout_s,
+                    take if fn == "candidate" else [k - 1] * len(take),
+                    slots,
                 )
                 times[fn] = (max(outer - overhead, 1e-9), inner)
                 if fn == "candidate":
