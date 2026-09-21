@@ -53,21 +53,32 @@ def on_battery() -> bool:
 
 
 def terminate_launched(why: str) -> None:
+    """Terminate each instance separately: one stale id must not make a combined request fail and
+    leave the live ones running."""
     if not LAUNCHED:
         return
     log(f"terminating {len(LAUNCHED)} instance(s): {why}")
-    for attempt in range(5):
-        try:
-            vm("terminate", *LAUNCHED)
-            log("terminate request accepted")
+    remaining = list(LAUNCHED)
+    for attempt in range(6):
+        for iid in list(remaining):
+            try:
+                vm("terminate", iid)
+                remaining.remove(iid)
+            except subprocess.CalledProcessError as e:
+                if "not found" in e.stderr.lower() or "terminated" in e.stderr.lower():
+                    remaining.remove(iid)
+                else:
+                    log(f"terminate {iid[:8]} attempt {attempt + 1} failed: {e.stderr[-160:]}")
+        if not remaining:
+            log("all terminate requests accepted")
             return
-        except subprocess.CalledProcessError as e:
-            log(f"terminate attempt {attempt + 1} failed: {e.stderr[-200:]}")
-            time.sleep(15)
-    log("!!! COULD NOT TERMINATE - check cloud.lambda.ai/instances NOW: " + " ".join(LAUNCHED))
+        time.sleep(20)
+    log("!!! COULD NOT TERMINATE - check cloud.lambda.ai/instances NOW: " + " ".join(remaining))
 
 
-def launch_and_prepare(n: int, instance_type: str, ssh_key: str) -> list[str]:
+def launch_and_prepare(
+    n: int, instance_type: str, ssh_key: str, boot_window_s: float = 720
+) -> list[str]:
     for i in range(n):
         try:
             LAUNCHED.append(
@@ -77,8 +88,36 @@ def launch_and_prepare(n: int, instance_type: str, ssh_key: str) -> list[str]:
             log(f"launch {i} failed (capacity?): {e.stderr[-160:]}")
     if not LAUNCHED:
         raise SystemExit("no instances could be launched")
-    hosts = [vm("wait", iid) for iid in LAUNCHED]
-    log(f"instances up: {hosts}")
+    # Boot time varies from 4 to 25+ minutes. Wait for all in parallel, go with whatever is up
+    # within the window, and terminate stragglers rather than let one slow boot sink the batch.
+    up: dict[str, str] = {}
+
+    def wait_one(iid: str) -> None:
+        try:
+            up[iid] = vm("wait", iid)
+        except subprocess.CalledProcessError:
+            pass
+
+    waiters = [threading.Thread(target=wait_one, args=(iid,), daemon=True) for iid in LAUNCHED]
+    for t in waiters:
+        t.start()
+    t_end = time.time() + boot_window_s
+    for t in waiters:
+        t.join(max(0.0, t_end - time.time()))
+    slow = [iid for iid in LAUNCHED if iid not in up]
+    if slow:
+        log(f"{len(slow)} instance(s) not up after {boot_window_s / 60:.0f} min; terminating them")
+        for iid in slow:
+            try:
+                vm("terminate", iid)
+                LAUNCHED.remove(iid)
+            except subprocess.CalledProcessError as e:
+                log(
+                    f"could not terminate straggler {iid[:8]} now (finally retries): {e.stderr[-120:]}"
+                )
+    if not up:
+        raise SystemExit("no instance became active in time")
+    hosts = list(up.values())
     ready: list[str] = []
 
     def prep(host: str) -> None:
