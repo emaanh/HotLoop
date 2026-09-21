@@ -50,13 +50,20 @@ def _request(method: str, path: str, body: dict | None = None) -> dict:
             "User-Agent": "hotloop-vm/0.1",
         },
     )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.load(resp)
-    except urllib.error.HTTPError as e:
-        raise SystemExit(
-            f"Lambda API {method} {path} -> {e.code}: {e.read().decode()[:500]}"
-        ) from e
+    last: Exception | None = None
+    for attempt in range(4):  # the API times out now and then; every call here is safe to repeat
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return json.load(resp)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode()[:500]
+            if e.code < 500 and e.code != 429:
+                raise SystemExit(f"Lambda API {method} {path} -> {e.code}: {body}") from e
+            last = RuntimeError(f"{e.code}: {body}")
+        except (TimeoutError, urllib.error.URLError, ConnectionError) as e:
+            last = e
+        time.sleep(5 * (attempt + 1))
+    raise SystemExit(f"Lambda API {method} {path} failed after retries: {last}")
 
 
 def _ledger(event: str, **fields) -> None:
