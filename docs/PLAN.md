@@ -9,8 +9,8 @@ Principle: every milestone ends in a **gate** with a number that can fail. Cheap
 |---|---|---|---|---|
 | M0 | Verify reuse targets by reading code; repo skeleton | nothing | 0 | ✅ done 2026-09-20 |
 | M1 | Trustworthy measurement | Lambda | ~$50 (spent $0.82) | 🟢 G0 passed within- and cross-box (between-run SD ≈ 2%, one 5% outlier → D-22 pooling matters) |
-| M2 | Regime flips exist (G1) | Lambda | ~$100 (spent $0.56) | 🟢 **G1 passes on exploration data** (D-23). Remaining: turn ragged + algebraic into taskgen families, certify with the real evaluator, emit ~12 task packages |
-| M3 | Agents on MVP tasks (G2) | + OpenAI key, HF | ~$350 + ~$350 API | ⬜ |
+| M2 | Regime flips exist (G1) | Lambda | ~$100 (spent ≈$2) | ✅ done 2026-09-21: G1 passes on evaluator-grade data; `benchmark/dev-v0` = 6 headroom + 2 diagnostic + 4 control tasks |
+| M3 | Agents on MVP tasks (G2) — **M3-lite per D-17: OpenAI model only** | + OpenAI key | ~$350 + API | 🟡 runner, image, agent adapter built and verified; cost pilot running |
 | M4 | Generator scale-up (Level 2, 2nd SKU) | — | ~$300 | ⏸ parked (D-17) |
 | M5 | Quantization study | — | ~$1,400 (levers: BUDGET.md) | ⏸ parked (D-17) |
 | M6 | Write-up | — | 0 | ⬜ |

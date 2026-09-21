@@ -2,6 +2,43 @@
 
 Newest first. Numbers always with conditions (GPU, driver, n, CI). Dead ends belong here too.
 
+## 2026-09-21 (01:20Z) — M2 done: dev-v0 emitted and certified with the real evaluator; M3 plumbing live
+
+Conditions: third Lambda A100-SXM4-40GB box, torch 2.11.0+cu128, clocks locked.
+`hotloop-taskgen emit-all` (12 packages, fp64-calibrated tolerances, 40 s) then `hotloop-certify`
+(100 evaluations through `hotloop-eval` at ±2% / ≤30 pairs, ~25 min). **Every one of the 100
+evaluations was `ok`** — calibrated tolerances accepted every legitimate reordering/kernel.
+Full certificates: `private/cert/m2-dev-v0/`.
+
+| task | kind | headroom (best known) | lazy battery best | note |
+|---|---|---|---|---|
+| bchain vector-on-the-right | headroom | **18.1×** | 1.01 | no library one-liner applies |
+| bchain shared-wide-middle | headroom | **6.6×** | 1.01 | |
+| ragged zipf-heavy-tail | headroom | **10.9×** | 1.00 | |
+| ragged small-outliers | headroom | **7.5×** | 1.00 | |
+| ragged tiny-rare-long-outliers | headroom | **6.1×** | 1.00 | |
+| ragged tiny-outliers | headroom | **3.5×** | 1.00 | |
+| chain lowrank-sandwich | diagnostic | 23.4× | **22.9 (multi_dot)** | lazy-solvable, as predicted (D-24) |
+| chain tall-skinny | diagnostic | 4.4× | **4.4 (multi_dot)** | |
+| bchain vector-on-the-left | control | 1.01 | 0.73 | torch.compile is *slower* than eager here |
+| chain as-written-is-optimal | control | 1.00 | 1.00 | wrong order → 0.04× |
+| ragged uniform-len64 | control | 0.81 | 1.01 | best hand strategy loses |
+| ragged uniform-tiny-len4 | control | 0.30 | 1.05 | jagged kernel → 0.03–0.18× |
+
+Regret (best strategy of task A run on task B, relative to B's best): bchain 1.2–22.7×;
+chain 1.0–23.5×; ragged headroom tasks 1.28–3.62×, and up to 7.2× onto controls.
+Evaluator-grade numbers agree with the exploration harness to within a few percent → **G1 stands
+on evaluator-grade data** for 6 headroom tasks in 2 families.
+
+M3 plumbing, all verified on the box before spending API money:
+- Benchmark image builds in <3 min; has torch/triton/nvcc/nsys; evaluator installed.
+- Agent sandbox: GPU visible, task mount read-only (`Read-only file system`), no network (DNS
+  fails), in-container `hotloop-eval --quick` gives 18.5× for the known-best bchain order.
+- Fresh-container scoring: 18.69×, 18.91×. Bug found: `--cap-drop ALL` root can't write a results
+  dir owned by uid 1000 → world-writable results dir.
+- Live OpenAI smoke test (`gpt-5.5`, Responses API): 2 turns, tool calls parsed, usage logged.
+- Noticed and recorded: public docs already name dev-v0's winning strategies → D-28.
+
 ## 2026-09-21 (00:00Z) — M2 exploration on a second A100: G1 passes
 
 Conditions: Lambda `gpu_1x_a100_sxm4`, different physical GPU (UUID …ab7541b6) from the M1 box, same

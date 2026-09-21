@@ -266,3 +266,15 @@ Input/cached tokens are logged per call for cost accounting.
 Smoke-tested end-to-end (2 turns, tool calls parsed, usage captured). Reasoning effort to be fixed
 after a 3-trajectory cost pilot. Newer ids exist on the account (`gpt-5.6-*`) but their tiering is
 unknown to me; revisit if Emaan prefers one.
+
+## D-28 · dev-v0 is an *open development set*; secrecy is not its defence — accepted · 2026-09-21
+**Context.** I wrote the winning strategies for these regimes into public docs (LOG, D-23/D-24)
+before thinking about it, and the repo is public. Agents cannot look anything up at run time
+(sandbox has no network), but future models could train on it.
+**Decision.** Treat `benchmark/dev-v0` as open: fine for developing the harness, for the pilot and
+for within-study comparisons between models that predate it. Contamination-free claims must come
+from a **held-out set generated from unpublished regimes and seeds**, whose certificates and
+strategy notes live only in `private/`. From now on, per-task winning strategies for any *new*
+regime go in `private/`, and public docs report only headroom/regret numbers.
+**Why not scrub history.** The write-up would publish this regime structure anyway; the real
+defence against contamination is that tasks are generated, not that one set is secret.
