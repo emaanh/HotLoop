@@ -7,6 +7,7 @@ dependencies = ["hotloop-schemas"]
 
 [project.scripts]
 hotloop-vm = "hotloop_runner.lambda_cloud:main"
+hotloop-run = "hotloop_runner.sandbox:main"
 
 [build-system]
 requires = ["hatchling"]

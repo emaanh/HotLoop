@@ -3,7 +3,10 @@ name = "hotloop-agents"
 version = "0.0.1"
 description = "Agent adapters; a model is an OpenAI-compatible URL"
 requires-python = ">=3.11,<3.13"
-dependencies = ["hotloop-schemas"]
+dependencies = ["hotloop-schemas", "mini-swe-agent==2.4.6"]
+
+[project.scripts]
+hotloop-agent = "hotloop_agents.mini:main"
 
 [build-system]
 requires = ["hatchling"]

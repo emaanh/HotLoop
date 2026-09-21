@@ -1,0 +1,5 @@
+**
+!packages/schemas/**
+!packages/evaluator/**
+**/__pycache__
+**/tests
