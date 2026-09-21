@@ -1,7 +1,7 @@
 import torch
 
 S, T, D, LMAX = 16384, 732301, 32, 4096
-DIST = {'kind': 'zipf', 'min': 8, 'alpha': 1.1, 'max': 4096}
+DIST = {"kind": "zipf", "min": 8, "alpha": 1.1, "max": 4096}
 DTYPE = torch.float16
 
 

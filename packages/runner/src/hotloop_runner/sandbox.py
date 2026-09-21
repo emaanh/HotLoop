@@ -108,7 +108,13 @@ def finish(session: dict, out_dir: Path, evals: int) -> list[Result]:
     out_dir.mkdir(parents=True, exist_ok=True)
     ssh(host, f"sudo docker rm -f {name} >/dev/null 2>&1 || true", check=False)
     # the agent may have left root-owned files; snapshot what it produced
-    ssh(host, f"sudo chown -R ubuntu:ubuntu {base}/submission; mkdir -p {base}/results")
+    # The scoring container drops all capabilities, so its root cannot bypass file permissions:
+    # make the submission world-readable and the results dir world-writable.
+    ssh(
+        host,
+        f"sudo chown -R ubuntu:ubuntu {base}/submission; chmod -R a+rX {base}/submission; "
+        f"mkdir -p {base}/results; chmod 777 {base}/results",
+    )
     subprocess.run(
         ["rsync", "-az", "-e", "ssh " + " ".join(SSH_OPTS), "--max-size=50m",
          f"ubuntu@{host}:{base}/submission/", str(out_dir / "submission") + "/"],
