@@ -1,7 +1,7 @@
 import torch
 
 S, T, D, LMAX = 262144, 1048576, 32, 4
-DIST = {"kind": "uniform", "len": 4}
+DIST = {'kind': 'uniform', 'len': 4}
 DTYPE = torch.float16
 
 

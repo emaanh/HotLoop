@@ -35,6 +35,8 @@ addopts = "-q"
 
 [tool.ruff]
 line-length = 100
+# Sealed task packages are hashed byte-for-byte; a formatter must never touch them.
+extend-exclude = ["benchmark"]
 target-version = "py311"
 
 [tool.ruff.lint]

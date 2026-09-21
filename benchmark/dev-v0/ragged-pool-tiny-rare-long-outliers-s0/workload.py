@@ -1,7 +1,7 @@
 import torch
 
 S, T, D, LMAX = 262144, 1185736, 16, 512
-DIST = {"kind": "bimodal", "p_long": 0.001, "long": 512, "short": 4}
+DIST = {'kind': 'bimodal', 'p_long': 0.001, 'long': 512, 'short': 4}
 DTYPE = torch.float16
 
 
