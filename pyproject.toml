@@ -1,0 +1,16 @@
+[project]
+name = "hotloop"
+version = "0.1.0"
+description = "Agentic GPU kernel optimization benchmark"
+requires-python = ">=3.11"
+dependencies = ["modal>=1.0"]
+
+[project.optional-dependencies]
+agents = ["openai>=1.100"]
+
+[project.scripts]
+hotloop = "hotloop.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

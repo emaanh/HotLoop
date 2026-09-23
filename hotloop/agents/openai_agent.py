@@ -1,0 +1,165 @@
+"""Reference agent: a minimal tool-calling loop for any OpenAI-compatible endpoint.
+
+    api="responses" - OpenAI Responses API (OpenAI models)
+    api="chat"      - Chat Completions (vLLM / SGLang / other servers for open-weight models)
+
+Imports only hotloop.interface: it knows nothing about scoring or backends.
+"""
+
+import json
+import os
+import time
+
+from hotloop.interface import AgentResult, Budget, BudgetExceeded, Environment
+
+SYSTEM = """You are an expert GPU kernel engineer working autonomously on a remote Linux machine with an NVIDIA GPU \
+and no internet access. The task statement follows (it is also in TASK.md in your working directory). Write code, \
+benchmark, profile and iterate. Call `submit` when you are done; the solution file is scored as it is at that moment."""
+
+MAX_OUTPUT_CHARS = 12000
+
+_BASH = {"name": "bash",
+         "description": "Run a shell command in the working directory. Returns combined stdout/stderr "
+                        f"(last {MAX_OUTPUT_CHARS} characters) and the exit code.",
+         "parameters": {"type": "object", "properties": {
+             "command": {"type": "string"},
+             "timeout": {"type": "integer", "description": "seconds (default 600)"}},
+             "required": ["command"]}}
+_WRITE = {"name": "write_file", "description": "Write text to a file (relative paths are under the working directory).",
+          "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
+                         "required": ["path", "content"], "additionalProperties": False}}
+_SUBMIT = {"name": "submit", "description": "Finish; the solution file is scored.",
+           "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}}
+TOOL_DEFS = [_BASH, _WRITE, _SUBMIT]
+
+
+class OpenAIAgent:
+    def __init__(self, model: str, effort: str | None = "medium", api: str = "responses",
+                 base_url: str | None = None, api_key_env: str = "OPENAI_API_KEY", max_turns: int = 150):
+        self.model = model
+        self.effort = None if effort in (None, "", "none", "None") else effort
+        self.api = api
+        self.base_url = base_url
+        self.api_key_env = api_key_env
+        self.max_turns = int(max_turns)
+        self.name = model.replace("/", "_")
+
+    # --- tools -------------------------------------------------------------------
+    def _tool(self, env: Environment, name: str, args: dict) -> str:
+        if name == "bash":
+            res = env.exec(args.get("command", ""), timeout=int(args.get("timeout") or 600))
+            out = res.output[-MAX_OUTPUT_CHARS:]
+            return out + f"\n[exit code {res.exit_code}{', timed out' if res.timed_out else ''}]"
+        if name == "write_file":
+            path = args["path"] if args["path"].startswith("/") else os.path.join(env.workdir, args["path"])
+            env.write_text(path, args["content"])
+            return f"Wrote {len(args['content'])} bytes to {path}."
+        return f"Unknown tool {name}."
+
+    def _status(self, env: Environment, turns: int) -> str:
+        return f"\n[{env.seconds_left() / 60:.0f} min and {self.max_turns - turns} tool calls left]"
+
+    # --- loop --------------------------------------------------------------------
+    def run(self, env: Environment, task: str, budget: Budget) -> AgentResult:
+        from openai import OpenAI
+
+        client = OpenAI(base_url=self.base_url, api_key=os.environ.get(self.api_key_env))
+        step = self._responses_step if self.api == "responses" else self._chat_step
+        state = {"prev": None, "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
+                 "pending": [{"role": "user", "content": task}]}
+        transcript = [{"role": "user", "content": task}]
+        usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "reasoning_tokens": 0}
+        turns, nudges = 0, 0
+        stop = "budget"
+        while turns < self.max_turns and env.seconds_left() > 0:
+            try:
+                texts, calls = step(client, state, usage)
+            except BudgetExceeded:
+                break
+            except Exception as e:
+                stop = f"error: api: {e!r}"[:300]
+                transcript.append({"role": "error", "content": repr(e)})
+                break
+            transcript += [{"role": "assistant", "content": t} for t in texts if t]
+            if not calls:
+                nudges += 1
+                if nudges > 3:
+                    stop = "no_tool_calls"
+                    break
+                self._add_user(state, "Keep working with the tools, or call `submit` if you are done.")
+                continue
+            outputs, submitted, out_of_budget = [], False, False
+            for call_id, name, raw in calls:
+                turns += 1
+                try:
+                    args = json.loads(raw or "{}")
+                except json.JSONDecodeError:
+                    args = {}
+                transcript.append({"role": "tool_call", "name": name, "args": args, "t": round(time.time())})
+                if name == "submit":
+                    out, submitted = "Submitted.", True
+                elif out_of_budget:
+                    out = "Budget exhausted."
+                else:
+                    try:
+                        out = self._tool(env, name, args)
+                    except BudgetExceeded:
+                        out, out_of_budget = "Budget exhausted.", True
+                    except Exception as e:
+                        out = f"[tool error: {e!r}]"
+                out += self._status(env, turns)
+                transcript.append({"role": "tool_output", "name": name, "content": out})
+                outputs.append((call_id, name, out))
+            self._add_outputs(state, outputs)
+            if submitted or out_of_budget:
+                stop = "submitted" if submitted else "budget"
+                break
+        return AgentResult(stop_reason=stop, transcript=transcript, usage=usage,
+                           metadata={"model": self.model, "effort": self.effort, "api": self.api,
+                                     "base_url": self.base_url, "turns": turns})
+
+    # --- Responses API -----------------------------------------------------------
+    def _responses_step(self, client, state, usage):
+        kw = {"reasoning": {"effort": self.effort}} if self.effort else {}
+        resp = client.responses.create(model=self.model, instructions=SYSTEM, input=state["pending"],
+                                       tools=[{"type": "function", "strict": t["name"] != "bash", **t} for t in TOOL_DEFS],
+                                       previous_response_id=state["prev"], **kw)
+        state["prev"] = resp.id
+        if resp.usage:
+            usage["input_tokens"] += resp.usage.input_tokens
+            usage["output_tokens"] += resp.usage.output_tokens
+            usage["cached_tokens"] += getattr(resp.usage.input_tokens_details, "cached_tokens", 0) or 0
+            usage["reasoning_tokens"] += getattr(resp.usage.output_tokens_details, "reasoning_tokens", 0) or 0
+        texts, calls = [], []
+        for o in resp.output:
+            if o.type == "message":
+                texts.append("".join(c.text for c in o.content if getattr(c, "type", "") == "output_text"))
+            elif o.type == "function_call":
+                calls.append((o.call_id, o.name, o.arguments))
+        state["pending"] = []
+        return texts, calls
+
+    # --- Chat Completions API ----------------------------------------------------
+    def _chat_step(self, client, state, usage):
+        kw = {"reasoning_effort": self.effort} if self.effort else {}
+        resp = client.chat.completions.create(model=self.model, messages=state["messages"],
+                                              tools=[{"type": "function", "function": t} for t in TOOL_DEFS], **kw)
+        if resp.usage:
+            usage["input_tokens"] += resp.usage.prompt_tokens
+            usage["output_tokens"] += resp.usage.completion_tokens
+            details = getattr(resp.usage, "prompt_tokens_details", None)
+            usage["cached_tokens"] += (getattr(details, "cached_tokens", 0) or 0) if details else 0
+        msg = resp.choices[0].message
+        state["messages"].append(msg.model_dump(exclude_none=True))
+        calls = [(c.id, c.function.name, c.function.arguments) for c in (msg.tool_calls or [])]
+        return [msg.content or ""], calls
+
+    # --- history helpers -----------------------------------------------------------
+    def _add_user(self, state, text):
+        state["pending"].append({"role": "user", "content": text})
+        state["messages"].append({"role": "user", "content": text})
+
+    def _add_outputs(self, state, outputs):
+        for call_id, _, out in outputs:
+            state["pending"].append({"type": "function_call_output", "call_id": call_id, "output": out})
+            state["messages"].append({"role": "tool", "tool_call_id": call_id, "content": out})
