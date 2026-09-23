@@ -116,6 +116,17 @@ def score_solution(task_id: str, solution_src: str, hidden: bool = True) -> dict
 
 # --- episodes (orchestrator runs here so API keys stay in Modal) ----------------------
 
+@app.function(image=cpu_image, secrets=secrets, timeout=120)
+def preflight_agent(agent: str, agent_kwargs: dict) -> str:
+    from hotloop.bench.registry import make_agent
+
+    a = make_agent(agent, **agent_kwargs)
+    try:
+        return a.preflight() if hasattr(a, "preflight") else "no preflight"
+    except Exception as e:
+        return f"FAILED: {e!r}"[:500]
+
+
 @app.function(image=cpu_image, secrets=secrets, timeout=6 * 3600, volumes={config.MOUNT_RUNS: runs_vol})
 def run_episode(agent: str, agent_kwargs: dict, task_id: str, gpu: str, minutes: float) -> dict:
     from hotloop.backends.modal_backend import ModalBackend

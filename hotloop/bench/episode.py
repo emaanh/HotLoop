@@ -95,7 +95,8 @@ def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: b
         "startup_minutes": round((t0 - t_open) / 60, 1),
         "solution": solution or "", "snapshot": snapshot, "infra_error": infra_error,
     }
-    if score and res.stop_reason != "infra_error":
+    provider_error = str(res.stop_reason).startswith("error: api")  # excluded from results anyway
+    if score and res.stop_reason != "infra_error" and not provider_error:
         record["eval"], record["scored"] = score_with_fallback(backend, task_id, gpu, solution, snapshot)
     return {"record": record, "transcript": res.transcript}
 

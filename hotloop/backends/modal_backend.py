@@ -95,6 +95,9 @@ class ModalBackend:
         return list(fn.starmap([(t, s, hidden) for t, s in jobs], return_exceptions=True))
 
     # --- remote episodes (orchestrator + API keys live in Modal) --------------------
+    def preflight(self, agent: str, agent_kwargs: dict) -> str:
+        return self._fn("preflight_agent").remote(agent, agent_kwargs)
+
     def spawn_episode(self, agent: str, agent_kwargs: dict, task_id: str, gpu: str, minutes: float):
         return self._fn("run_episode").spawn(agent, agent_kwargs, task_id, gpu, minutes)
 

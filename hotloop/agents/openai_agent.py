@@ -44,6 +44,17 @@ class OpenAIAgent:
         self.max_turns = int(max_turns)
         self.name = model.replace("/", "_")
 
+    def preflight(self) -> str:
+        """One minimal request, so a bad key or empty balance fails before any GPU is used."""
+        from openai import OpenAI
+
+        client = OpenAI(base_url=self.base_url, api_key=os.environ.get(self.api_key_env), max_retries=0)
+        if self.api == "responses":
+            client.responses.create(model=self.model, input="ok", max_output_tokens=16)
+        else:
+            client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": "ok"}], max_tokens=1)
+        return "ok"
+
     # --- tools -------------------------------------------------------------------
     def _tool(self, env: Environment, name: str, args: dict) -> str:
         if name == "bash":

@@ -120,6 +120,9 @@ def cmd_run(args, backend):
     remote = args.backend == "modal" and not args.local_agent
     tasks = [t for t in tasks for _ in range(args.repeats)]
     if remote:
+        check = backend.preflight(args.agent, kwargs)
+        if check.startswith("FAILED"):
+            sys.exit(f"agent preflight failed, nothing launched: {check}")
         calls = {}
         for i, t in enumerate(tasks):
             calls[f"{t}#{i}"] = backend.spawn_episode(args.agent, kwargs, t, args.gpu, args.minutes)
