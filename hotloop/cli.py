@@ -66,7 +66,15 @@ def cmd_results(args, backend):
     import math
     from collections import defaultdict
 
-    recs = [r for r in backend.results(args.since) if r.get("stop_reason") != "infra_error" and r.get("eval")]
+    all_recs = backend.results(args.since)
+    # Infrastructure and model-provider failures (quota, outages) say nothing about the
+    # agent's ability: excluded by default, and counted so they are never silent.
+    provider_err = lambda r: str(r.get("stop_reason", "")).startswith("error: api")
+    excluded = [r for r in all_recs if r.get("stop_reason") == "infra_error" or (provider_err(r) and not args.include_errors)]
+    recs = [r for r in all_recs if r not in excluded and r.get("eval")]
+    if excluded:
+        print(f"excluded {len(excluded)} episodes with infrastructure/provider errors "
+              f"({', '.join(sorted({r['agent'] for r in excluded}))}); --include-errors to keep them\n")
     if args.agent_filter:
         recs = [r for r in recs if r["agent"] in args.agent_filter.split(",")]
     gm = lambda xs: math.exp(sum(math.log(max(x, 1e-9)) for x in xs) / len(xs)) if xs else 0.0
@@ -170,6 +178,7 @@ def main():
     p = add("results")
     p.add_argument("--since", default="", help="run-id prefix to start from, e.g. 20260923-1200")
     p.add_argument("--agent-filter", default="", help="comma-separated agent names")
+    p.add_argument("--include-errors", action="store_true", help="keep episodes that ended in provider/API errors")
     p = add("run")
     p.add_argument("--agent", default="openai", help="registered name or module:Class")
     p.add_argument("-a", "--agent-arg", action="append", help="agent option key=value (repeatable)")

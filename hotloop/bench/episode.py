@@ -45,9 +45,10 @@ class BudgetedEnvironment:
 
 
 def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: bool = True, log=print) -> dict:
-    t0 = time.time()
+    t_open = time.time()
     env = backend.open_environment(task_id, gpu=gpu, minutes=minutes)
-    deadline = time.time() + minutes * 60
+    t0 = time.time()  # the budget starts once the workspace is ready, not while a GPU is being provisioned
+    deadline = t0 + minutes * 60
     result: list[AgentResult] = []
     try:
         task_md = env.read_text(os.path.join(env.workdir, "TASK.md"))
@@ -91,6 +92,7 @@ def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: b
         "task_id": task_id, "gpu": gpu, "backend": backend.name, "agent": agent.name,
         "agent_metadata": res.metadata, "stop_reason": res.stop_reason, "usage": res.usage,
         "budget_minutes": minutes, "agent_minutes": round((min(time.time(), deadline) - t0) / 60, 1),
+        "startup_minutes": round((t0 - t_open) / 60, 1),
         "solution": solution or "", "snapshot": snapshot, "infra_error": infra_error,
     }
     if score and res.stop_reason != "infra_error":
