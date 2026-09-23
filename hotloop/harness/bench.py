@@ -6,6 +6,7 @@
 import json
 import os
 import sys
+import time
 
 WORKDIR = os.environ.get("HOTLOOP_WORKDIR", "/workspace")
 TASK_DIR = os.environ.get("HOTLOOP_TASK_DIR", os.path.join(WORKDIR, "task"))
@@ -61,6 +62,14 @@ def main():
     with open(cache_path, "w") as f:
         json.dump(cache, f)
     print(report(r))
+    if r["ok"]:
+        # Best-submission fallback: scored if the final solution.py fails.
+        snap_dir = os.path.join(WORKDIR, ".hotloop", "passing")
+        os.makedirs(snap_dir, exist_ok=True)
+        path = os.path.join(snap_dir, f"{time.strftime('%Y%m%d-%H%M%S')}.py")
+        with open(path, "w") as f:
+            f.write(src)
+        print(f"All public shapes correct: snapshot saved to {path}")
 
 
 if __name__ == "__main__":

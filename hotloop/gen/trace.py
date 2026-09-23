@@ -18,12 +18,19 @@ import torch.fx as fx
 
 from hotloop.harness.inputs import make_inputs
 
-# v1 shapes. The first of each list is public; the rest are hidden.
+# v1 shape grids. The first N_PUBLIC shapes that a model supports are public (agents
+# see and bench them); the rest are hidden. Each public set mixes batch 1 and batch > 1,
+# short and long lengths, and a non-power-of-two length, so a kernel that only works
+# for one case is caught before submission.
 # TODO: replace with shapes sampled from public request traces.
+N_PUBLIC = 3
+MIN_HIDDEN = 2
 # prefill: (batch, prompt length)
-PREFILL_SHAPES = [(1, 2048), (1, 512), (4, 1024), (2, 4096), (1, 1000), (3, 777)]
+PREFILL_SHAPES = [(1, 2048), (4, 1024), (3, 777),
+                  (1, 512), (2, 4096), (1, 1000), (8, 256), (2, 1536), (1, 3000)]
 # decode: (batch, tokens already in the KV cache); one new token per sequence
-DECODE_SHAPES = [(16, 2048), (1, 4096), (8, 1024), (32, 512), (4, 8192), (13, 1500)]
+DECODE_SHAPES = [(16, 2048), (1, 4096), (13, 1500),
+                 (8, 1024), (32, 512), (4, 8192), (2, 3000), (24, 777), (64, 256)]
 PHASES = ("prefill", "decode")
 
 # Integer/bool inputs (masks, positions, indices) are always stored exactly: replacing
@@ -419,11 +426,13 @@ def trace_model(model_id: str, phases=PHASES) -> dict:
             torch.cuda.empty_cache()
         if not grid:
             continue
-        public = shape_meta(phase, *grid[0])["shape_id"]
+        order = [shape_meta(phase, *g)["shape_id"] for g in grid]
         for skey, recs in by_key.items():
-            if public not in recs or len(recs) < 3:
+            traced = [sid for sid in order if sid in recs]
+            public, hidden = traced[:N_PUBLIC], traced[N_PUBLIC:]
+            if len(public) < N_PUBLIC or len(hidden) < MIN_HIDDEN:
                 continue
-            first = recs[public]
+            first = recs[public[0]]
             pattern = path_pattern(first["path"])
             name = pattern.replace(".*", "").replace("model.", "", 1)
             task_id = f"{slug(model_id)}__{name}" if phase == "prefill" else f"{slug(model_id)}__decode__{name}"
@@ -433,8 +442,7 @@ def trace_model(model_id: str, phases=PHASES) -> dict:
                 "task": {
                     "task_id": task_id, "model_id": model_id, "module_path": first["path"],
                     "module_class": first["module_class"], "pattern": pattern, "struct_key": skey,
-                    "phase": phase, "public_shapes": [public],
-                    "hidden_shapes": [s for s in recs if s != public],
+                    "phase": phase, "public_shapes": public, "hidden_shapes": hidden,
                 },
                 "shapes": recs,
             }

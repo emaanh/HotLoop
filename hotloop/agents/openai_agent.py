@@ -63,7 +63,8 @@ class OpenAIAgent:
     def run(self, env: Environment, task: str, budget: Budget) -> AgentResult:
         from openai import OpenAI
 
-        client = OpenAI(base_url=self.base_url, api_key=os.environ.get(self.api_key_env))
+        # Generous retries: many episodes run in parallel and rate limits must not end one early.
+        client = OpenAI(base_url=self.base_url, api_key=os.environ.get(self.api_key_env), max_retries=8)
         step = self._responses_step if self.api == "responses" else self._chat_step
         state = {"prev": None, "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
                  "pending": [{"role": "user", "content": task}]}

@@ -23,11 +23,13 @@ inputs, including inputs with large outliers. Do not hardcode the public shape.
 - Accuracy tolerance is derived from PyTorch's own low-precision error against an fp64 reference (a few times \
 that error is allowed).
 - Score = speedup over torch.compile of the reference, and fraction of the speed-of-light bound.
+- Every `bench` run in which all public shapes are correct saves a snapshot of solution.py. If the final \
+solution.py fails scoring (e.g. you were mid-edit when time ran out), the latest snapshot is scored instead.
 
 ## Tools on this machine (no internet access)
 - `python -m hotloop.harness.bench [solution.py]` - correctness, timing, speed-of-light and a per-kernel time \
-breakdown on the public shape, with the same checks as final scoring (~1 min; the first run also compiles the \
-torch.compile baseline).
+breakdown on every public shape, with the same checks as final scoring (1-3 min; the first run also compiles the \
+torch.compile baselines).
 - `ncu --clock-control none ...` (Nsight Compute: per-kernel metrics) and `nsys profile ...` + `nsys stats` \
 (Nsight Systems: timeline) are installed.
 """
@@ -38,6 +40,7 @@ def _fmt(dims) -> str:
 
 
 def render_task_md(task: dict, meta: dict, reference: str, workdir: str, gpu: str, minutes: float) -> str:
+    public = task.get("public_shapes") or [meta["shape_id"]]
     sym = task.get("symbolic_shapes")
     if sym:
         inputs = "\n".join(f"  {i['name']}: {i['dtype']}{_fmt(s['shape'])}  (public: {_fmt(i['shape'])}, {i['kind']})"
@@ -65,7 +68,9 @@ GPU: {gpu}. Wall-clock budget: {minutes:g} minutes. Workspace: {workdir}
 Write the fastest correct implementation of `reference` below as custom GPU kernels in {workdir}/solution.py.
 Whatever is in that file when the budget ends (or when you stop) is scored.
 
-Reference for the public shape {meta['shape_id']} (also at {workdir}/task/shapes/{meta['shape_id']}/reference.py):
+Public shapes (all checked by `bench`): {', '.join(public)}. Hidden shapes are different values of the same dims.
+Reference for {meta['shape_id']} (each public shape has its own copy at {workdir}/task/shapes/<shape>/reference.py;
+they differ only in the sizes baked into reshapes):
 ```python
 {reference.strip()}
 ```
@@ -96,8 +101,8 @@ def prepare_workspace(env: Environment, gpu: str, minutes: float) -> None:
     res = env.exec(f"ls {wd}/task/shapes", timeout=60)
     if res.exit_code != 0:
         raise RuntimeError(f"task files missing in workspace: {res.output}")
-    sid = res.output.split()[0]
     task = json.loads(env.read_text(os.path.join(wd, "task", "task.json")))
+    sid = (task.get("public_shapes") or res.output.split())[0]
     meta = json.loads(env.read_text(os.path.join(wd, "task", "shapes", sid, "meta.json")))
     ref = env.read_text(os.path.join(wd, "task", "shapes", sid, "reference.py"))
     env.write_text(os.path.join(wd, "TASK.md"), render_task_md(task, meta, ref, wd, gpu, minutes))

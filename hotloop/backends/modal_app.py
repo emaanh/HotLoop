@@ -83,6 +83,22 @@ def list_tasks(gpu: str | None = None, kept_only: bool = True) -> list[str]:
     return store.kept_tasks(gpu) if gpu and kept_only else store.task_ids()
 
 
+@app.function(image=cpu_image, timeout=600, volumes={config.MOUNT_RUNS: runs_vol})
+def collect_results(since: str = "") -> list[dict]:
+    """result.json of every episode whose run id sorts at or after `since` (e.g. 20260923-1200)."""
+    import json
+    import os
+
+    root = os.path.join(config.MOUNT_RUNS, "episodes")
+    out = []
+    for run in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        path = os.path.join(root, run, "result.json")
+        if run >= since and os.path.exists(path):
+            with open(path) as f:
+                out.append(json.load(f))
+    return out
+
+
 # --- scoring -----------------------------------------------------------------------
 
 @app.function(image=gpu_image, gpu=config.DEV_GPU, timeout=3600, volumes=ALL_VOLUMES)

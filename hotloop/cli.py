@@ -61,6 +61,39 @@ def _print_eval(ev: dict):
         print("error:", ev["error"][:1500])
 
 
+def cmd_results(args, backend):
+    """Aggregate episodes: per (agent, task) and per (agent, phase)."""
+    import math
+    from collections import defaultdict
+
+    recs = [r for r in backend.results(args.since) if r.get("stop_reason") != "infra_error" and r.get("eval")]
+    if args.agent_filter:
+        recs = [r for r in recs if r["agent"] in args.agent_filter.split(",")]
+    gm = lambda xs: math.exp(sum(math.log(max(x, 1e-9)) for x in xs) / len(xs)) if xs else 0.0
+    rows = defaultdict(list)
+    for r in recs:
+        sc = r["eval"].get("score") or {}
+        rows[(r["agent"], r["task_id"])].append((bool(sc.get("correct")), sc.get("speedup_geomean", 0.0),
+                                                 sc.get("sol_frac_geomean", 0.0), r.get("scored")))
+    print(f"{'agent':14} {'task':48} {'runs':>4} {'correct':>8} {'speedup (correct runs)':>24} {'SOL%':>6}")
+    by_phase = defaultdict(list)
+    for (agent, task), rs in sorted(rows.items()):
+        ok = [x for x in rs if x[0]]
+        sp = [x[1] for x in ok]
+        spread = f"{gm(sp):.2f}x [{min(sp):.2f}-{max(sp):.2f}]" if sp else "-"
+        sol = f"{100 * sum(x[2] for x in ok) / len(ok):5.1f}" if ok else "    -"
+        snaps = sum(1 for x in rs if x[3] == "snapshot")
+        print(f"{agent:14} {task:48} {len(rs):>4} {len(ok):>4}/{len(rs):<3} {spread:>24} {sol:>6}"
+              + (f"  ({snaps} scored from snapshot)" if snaps else ""))
+        by_phase[(agent, "decode" if "__decode__" in task else "prefill")] += rs
+    print()
+    print(f"{'agent':14} {'phase':8} {'runs':>4} {'correct':>8} {'geomean speedup (correct)':>26} {'mean SOL% (correct)':>20}")
+    for (agent, phase), rs in sorted(by_phase.items()):
+        ok = [x for x in rs if x[0]]
+        print(f"{agent:14} {phase:8} {len(rs):>4} {100 * len(ok) / len(rs):7.0f}% {gm([x[1] for x in ok]):25.2f}x "
+              f"{(100 * sum(x[2] for x in ok) / len(ok)) if ok else 0:19.1f}%")
+
+
 def cmd_run(args, backend):
     from hotloop.bench.episode import run_episode, save_episode
     from hotloop.bench.registry import make_agent
@@ -77,23 +110,38 @@ def cmd_run(args, backend):
     if not tasks:
         sys.exit("no tasks (run `hotloop filter` first or pass --task)")
     remote = args.backend == "modal" and not args.local_agent
+    tasks = [t for t in tasks for _ in range(args.repeats)]
     if remote:
-        calls = {t: backend.spawn_episode(args.agent, kwargs, t, args.gpu, args.minutes) for t in tasks}
+        calls = {}
+        for i, t in enumerate(tasks):
+            calls[f"{t}#{i}"] = backend.spawn_episode(args.agent, kwargs, t, args.gpu, args.minutes)
         for t, c in calls.items():
             print(f"[spawned] {t}  call={c.object_id}")
         for t, c in calls.items():
-            rec = c.get()
-            print(f"\n=== {t}  ({rec['agent']}, {rec['stop_reason']}, {rec['agent_minutes']} min, run {rec['run_id']})")
+            try:
+                rec = c.get()
+            except Exception as e:
+                print(f"\n=== {t}  FAILED TO RUN: {e!r}"[:400])
+                continue
+            print(f"\n=== {t}  ({rec['agent']}, {rec['stop_reason']}, {rec['agent_minutes']} min, "
+                  f"scored={rec.get('scored')}, run {rec['run_id']})")
             print("usage:", json.dumps(rec["usage"]))
-            _print_eval(rec["eval"])
+            if rec["stop_reason"] == "infra_error":
+                print("INFRASTRUCTURE ERROR (not scored; re-run):", rec.get("infra_error"))
+            else:
+                _print_eval(rec["eval"])
     else:
         agent = make_agent(args.agent, **kwargs)
         for t in tasks:
             ep = run_episode(backend, agent, t, args.gpu, args.minutes)
             d = save_episode(ep, os.path.join(REPO, "runs"))
             rec = ep["record"]
-            print(f"\n=== {t}  ({rec['agent']}, {rec['stop_reason']}, {rec['agent_minutes']} min) saved to {d}")
-            _print_eval(rec["eval"])
+            print(f"\n=== {t}  ({rec['agent']}, {rec['stop_reason']}, {rec['agent_minutes']} min, "
+                  f"scored={rec.get('scored')}) saved to {d}")
+            if rec["stop_reason"] == "infra_error":
+                print("INFRASTRUCTURE ERROR (not scored; re-run):", rec.get("infra_error"))
+            else:
+                _print_eval(rec["eval"])
 
 
 def main():
@@ -119,6 +167,9 @@ def main():
     p = add("selftest")
     p.add_argument("--task", default="qwen2.5-0.5b-instruct__layers.input_layernorm")
     p.add_argument("--suite", default="rmsnorm"); p.add_argument("--only", default="")
+    p = add("results")
+    p.add_argument("--since", default="", help="run-id prefix to start from, e.g. 20260923-1200")
+    p.add_argument("--agent-filter", default="", help="comma-separated agent names")
     p = add("run")
     p.add_argument("--agent", default="openai", help="registered name or module:Class")
     p.add_argument("-a", "--agent-arg", action="append", help="agent option key=value (repeatable)")
@@ -128,6 +179,7 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--phase", choices=["prefill", "decode"], help="with no --task: only tasks of this phase")
     p.add_argument("--minutes", type=float, default=30)
+    p.add_argument("--repeats", type=int, default=1, help="independent runs per task")
     p.add_argument("--local-agent", action="store_true", help="(modal) run the agent loop on this machine")
     args = ap.parse_args()
     for k, v in (("backend", "modal"), ("gpu", config.DEV_GPU), ("root", "~/.hotloop"), ("isolation", "docker")):
@@ -166,6 +218,8 @@ def main():
         sys.exit(0 if ok else 1)
     elif args.cmd == "run":
         cmd_run(args, backend)
+    elif args.cmd == "results":
+        cmd_results(args, backend)
 
 
 if __name__ == "__main__":

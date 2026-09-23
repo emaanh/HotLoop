@@ -159,6 +159,16 @@ class LocalBackend:
         args = ["hotloop.harness.score_cli", task_id] + ([] if hidden else ["--public"])
         return self._run_module(args, stdin=solution_src)
 
+    def results(self, since: str = "") -> list[dict]:
+        root = os.path.join(self.store.runs, "episodes")
+        out = []
+        for run in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+            path = os.path.join(root, run, "result.json")
+            if run >= since and os.path.exists(path):
+                with open(path) as f:
+                    out.append(json.load(f))
+        return out
+
     # --- task set ----------------------------------------------------------------
     def list_tasks(self, gpu: str | None = None, kept_only: bool = True) -> list[str]:
         return self.store.kept_tasks(gpu) if gpu and kept_only else self.store.task_ids()

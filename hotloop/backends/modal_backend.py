@@ -1,8 +1,27 @@
 """Modal backend (client side). Talks to the deployed app in modal_app.py."""
 
+import time
+
 import modal
 
 from hotloop import config
+
+RETRIES = 4
+
+
+def _retry(fn):
+    """Transient control-plane errors (a dropped connection to the sandbox) must not
+    turn into a lost episode: retry with backoff before giving up."""
+    def wrapped(*args, **kwargs):
+        for attempt in range(RETRIES):
+            try:
+                return fn(*args, **kwargs)
+            except (ConnectionError, OSError, TimeoutError, modal.exception.ConnectionError,
+                    modal.exception.InternalFailure) as e:
+                if attempt == RETRIES - 1:
+                    raise
+                time.sleep(2 * 3 ** attempt)
+    return wrapped
 from hotloop.bench.workspace import prepare_workspace
 from hotloop.interface import ExecResult
 
@@ -15,6 +34,7 @@ class ModalEnvironment:
         self.gpu = gpu
         self.workdir = config.WORKDIR
 
+    @_retry
     def exec(self, command: str, timeout: int = 600) -> ExecResult:
         p = self.sb.exec("bash", "-lc", f"cd {self.workdir} && {{ {command}\n}} 2>&1", timeout=timeout)
         out = p.stdout.read()
@@ -22,9 +42,11 @@ class ModalEnvironment:
         code = p.returncode if code is None else code
         return ExecResult(output=out, exit_code=code, timed_out=code in (-1, 124, 137))
 
+    @_retry
     def read_text(self, path: str) -> str:
         return self.sb.filesystem.read_text(path)
 
+    @_retry
     def write_text(self, path: str, content: str) -> None:
         self.sb.filesystem.write_text(content, path)
 
@@ -75,6 +97,9 @@ class ModalBackend:
     # --- remote episodes (orchestrator + API keys live in Modal) --------------------
     def spawn_episode(self, agent: str, agent_kwargs: dict, task_id: str, gpu: str, minutes: float):
         return self._fn("run_episode").spawn(agent, agent_kwargs, task_id, gpu, minutes)
+
+    def results(self, since: str = "") -> list[dict]:
+        return self._fn("collect_results").remote(since)
 
     # --- task set ----------------------------------------------------------------
     def list_tasks(self, gpu: str | None = None, kept_only: bool = True) -> list[str]:

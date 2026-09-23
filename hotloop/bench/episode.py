@@ -68,25 +68,47 @@ def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: b
         if th.is_alive():
             log("[episode] agent did not return before the deadline; collecting solution anyway")
             result.append(AgentResult(stop_reason="deadline"))
+        solution, snapshot, infra_error = None, None, None
         try:
             solution = env.read_text(os.path.join(env.workdir, "solution.py"))
         except Exception as e:
-            solution = ""
-            log(f"[episode] could not read solution: {e!r}")
+            infra_error = f"could not read solution.py: {e!r}"[:300]
+            log(f"[episode] {infra_error}")
+        try:
+            latest = env.exec("ls -1t .hotloop/passing/*.py 2>/dev/null | head -1", timeout=60).output.strip()
+            if latest:
+                snapshot = env.read_text(latest if latest.startswith("/") else os.path.join(env.workdir, latest))
+        except Exception as e:
+            log(f"[episode] could not read snapshots: {e!r}")
     finally:
         env.close()
 
     res = result[0]
+    if solution is None and snapshot is None:
+        res.stop_reason = "infra_error"  # nothing retrievable: re-run, don't score as 0
     record = {
         "run_id": f"{time.strftime('%Y%m%d-%H%M%S')}_{agent.name}_{task_id}",
         "task_id": task_id, "gpu": gpu, "backend": backend.name, "agent": agent.name,
         "agent_metadata": res.metadata, "stop_reason": res.stop_reason, "usage": res.usage,
         "budget_minutes": minutes, "agent_minutes": round((min(time.time(), deadline) - t0) / 60, 1),
-        "solution": solution,
+        "solution": solution or "", "snapshot": snapshot, "infra_error": infra_error,
     }
-    if score:
-        record["eval"] = backend.score(task_id, solution, gpu=gpu, hidden=True)
+    if score and res.stop_reason != "infra_error":
+        record["eval"], record["scored"] = score_with_fallback(backend, task_id, gpu, solution, snapshot)
     return {"record": record, "transcript": res.transcript}
+
+
+def score_with_fallback(backend, task_id: str, gpu: str, final: str | None, snapshot: str | None):
+    """Score the final solution; if it fails, score the latest snapshot that passed `bench`."""
+    ev = backend.score(task_id, final, gpu=gpu, hidden=True) if final else None
+    if ev is not None and ev.get("ok"):
+        return ev, "final"
+    if snapshot and snapshot != final:
+        snap_ev = backend.score(task_id, snapshot, gpu=gpu, hidden=True)
+        if snap_ev.get("ok") or ev is None:
+            snap_ev["final_eval_summary"] = None if ev is None else {"error": ev.get("error"), "violations": ev.get("violations")}
+            return snap_ev, "snapshot"
+    return ev, "final"
 
 
 def save_episode(ep: dict, root: str) -> str:
@@ -94,9 +116,12 @@ def save_episode(ep: dict, root: str) -> str:
     d = os.path.join(root, "episodes", rec["run_id"])
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, "result.json"), "w") as f:
-        json.dump({k: v for k, v in rec.items() if k != "solution"}, f, indent=1, default=str)
+        json.dump({k: v for k, v in rec.items() if k not in ("solution", "snapshot")}, f, indent=1, default=str)
     with open(os.path.join(d, "solution.py"), "w") as f:
         f.write(rec["solution"])
+    if rec.get("snapshot"):
+        with open(os.path.join(d, "snapshot.py"), "w") as f:
+            f.write(rec["snapshot"])
     with open(os.path.join(d, "transcript.json"), "w") as f:
         json.dump(ep["transcript"], f, indent=1, default=str)
     return d
