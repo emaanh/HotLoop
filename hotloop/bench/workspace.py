@@ -14,7 +14,9 @@ RULES = """## Rules (enforced automatically; violations score 0)
 same outputs (same count, dtypes and shapes).
 - Write your own kernels: Triton, or CUDA C++ via `torch.utils.cpp_extension.load_inline`. Inside `solution()`, \
 PyTorch may only allocate or reinterpret memory (torch.empty/zeros, .view, .permute, .transpose, ...). No torch \
-math, copies, dtype casts, torch.compile, cuBLAS/cuDNN, or other library kernels.
+math, copies, dtype casts, torch.compile, cuBLAS/cuDNN, or other library kernels. Note that .reshape(), \
+.contiguous() and .flatten() silently copy when the tensor is not contiguous (e.g. after .transpose()); that \
+counts as a copy.
 - Allowed imports: torch, triton, math, numpy, functools, itertools, typing, dataclasses, collections, operator, enum.
 - `solution()` is captured into a CUDA graph for timing: launch kernels on the current stream (C++: \
 `at::cuda::getCurrentCUDAStream()`), no host synchronization (.item(), .cpu(), printing tensors), no host memory.

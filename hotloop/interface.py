@@ -44,6 +44,9 @@ class Environment(Protocol):
 class Budget:
     minutes: float
     deadline: float   # unix time; the environment refuses work after this
+    # Agents should append their transcript events here as they happen: if an agent
+    # overruns the deadline, the benchmark still has the record up to that point.
+    events: list = field(default_factory=list)
 
 
 @dataclass

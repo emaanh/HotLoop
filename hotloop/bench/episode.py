@@ -50,13 +50,14 @@ def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: b
     t0 = time.time()  # the budget starts once the workspace is ready, not while a GPU is being provisioned
     deadline = t0 + minutes * 60
     result: list[AgentResult] = []
+    budget = Budget(minutes=minutes, deadline=deadline)
     try:
         task_md = env.read_text(os.path.join(env.workdir, "TASK.md"))
         benv = BudgetedEnvironment(env, deadline)
 
         def target():
             try:
-                result.append(agent.run(benv, task_md, Budget(minutes=minutes, deadline=deadline)))
+                result.append(agent.run(benv, task_md, budget))
             except BudgetExceeded:
                 result.append(AgentResult(stop_reason="budget"))
             except Exception as e:
@@ -68,7 +69,7 @@ def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: b
         th.join(timeout=max(0.0, deadline - time.time()) + GRACE_S)
         if th.is_alive():
             log("[episode] agent did not return before the deadline; collecting solution anyway")
-            result.append(AgentResult(stop_reason="deadline"))
+            result.append(AgentResult(stop_reason="deadline", transcript=list(budget.events)))
         solution, snapshot, infra_error = None, None, None
         try:
             solution = env.read_text(os.path.join(env.workdir, "solution.py"))
@@ -85,6 +86,8 @@ def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: b
         env.close()
 
     res = result[0]
+    if not res.transcript and budget.events:  # agent failed before returning its own copy
+        res.transcript = list(budget.events)
     if solution is None and snapshot is None:
         res.stop_reason = "infra_error"  # nothing retrievable: re-run, don't score as 0
     record = {

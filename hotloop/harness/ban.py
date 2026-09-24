@@ -76,6 +76,17 @@ class BanViolation(RuntimeError):
     pass
 
 
+# Why a banned op usually shows up, and what to do instead. Shown in the violation
+# message so every agent gets the same, actionable explanation.
+_COPY_HINT = ("a data copy: .reshape()/.contiguous()/.flatten() copy when the tensor is not contiguous "
+              "(e.g. after .transpose()/.permute()). Use .view() only on contiguous tensors, or pass the "
+              "strides to your kernel and index with them.")
+_CAST_HINT = "a dtype/device conversion (.to(), .float(), .half(), .cpu()); do the conversion inside your kernel."
+_MATH_HINT = ("a PyTorch compute kernel (tensor arithmetic like x * y or x + 1, a torch function, or an "
+              "in-place op); do this computation inside your own kernel.")
+BAN_HINTS = {"clone": _COPY_HINT, "copy_": _COPY_HINT, "_to_copy": _CAST_HINT, "to": _CAST_HINT}
+
+
 class BanMode(TorchDispatchMode):
     def __init__(self):
         super().__init__()
@@ -84,7 +95,8 @@ class BanMode(TorchDispatchMode):
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         name = func.overloadpacket.__name__
         if name not in ALLOWED_ATEN:
-            msg = f"torch op aten.{name} called inside solution (only allocation/view ops are allowed)"
+            msg = (f"torch op aten.{name} called inside solution (only allocation/view ops are allowed). "
+                   f"This is {BAN_HINTS.get(name, _MATH_HINT)}")
             self.violations.append(msg)
             raise BanViolation(msg)
         return func(*args, **(kwargs or {}))

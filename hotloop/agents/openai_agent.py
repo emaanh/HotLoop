@@ -87,7 +87,8 @@ class OpenAIAgent:
         step = self._responses_step if self.api == "responses" else self._chat_step
         state = {"prev": None, "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
                  "pending": [{"role": "user", "content": task}]}
-        transcript = [{"role": "user", "content": task}]
+        transcript = budget.events  # recorded live, so it survives a deadline overrun
+        transcript.append({"role": "user", "content": task})
         usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "reasoning_tokens": 0,
                  "api_seconds": 0.0, "api_calls": 0}
         turns, nudges = 0, 0
