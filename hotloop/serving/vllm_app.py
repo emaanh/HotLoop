@@ -25,14 +25,16 @@ VARIANTS = {
 }
 GPU = "B200"  # 192 GB: fits BF16 on one card, and runs FP8/NVFP4 natively
 
-# CUDA *devel* image: vLLM JIT-compiles kernels at startup (DeepGEMM for FP8,
-# FlashInfer for NVFP4), which needs nvcc. CUDA 13.0 matches vLLM's torch wheel.
+# The official vLLM image: ships the Blackwell kernels (FlashInfer, DeepGEMM, CUTLASS)
+# prebuilt, so startup doesn't JIT-compile them (which is slow and failed on B200).
 image = (
-    modal.Image.from_registry("nvidia/cuda:13.0.3-devel-ubuntu24.04", add_python="3.12")
-    .uv_pip_install(f"vllm=={VLLM_VERSION}", "huggingface_hub[hf_transfer]")
-    # Compiled kernels (torch.compile, FlashInfer JIT) persist on the volume, so only the
-    # first start of each variant pays the (long) Blackwell kernel compilation.
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": "/models", "CUDA_HOME": "/usr/local/cuda",
+    modal.Image.from_registry(f"vllm/vllm-openai:v{VLLM_VERSION}")
+    .entrypoint([])
+    .run_commands("ln -sf $(command -v python3) /usr/local/bin/python")  # the image only ships `python3`
+    .pip_install("huggingface_hub[hf_transfer]")
+    # Anything that still compiles at startup (torch.compile, leftover JIT) is cached on
+    # the volume, so only the first start of each variant pays for it.
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": "/models",
           "VLLM_CACHE_ROOT": "/models/vllm-cache", "FLASHINFER_WORKSPACE_BASE": "/models/flashinfer-cache",
           "MAX_JOBS": "6"})
 )

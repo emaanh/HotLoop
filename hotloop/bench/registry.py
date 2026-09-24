@@ -17,10 +17,11 @@ def _load(spec: str):
     return getattr(importlib.import_module(mod), attr)
 
 
-def make_backend(name: str, **kw):
-    return _load(BACKENDS[name])(**kw)
+def make_backend(backend: str, /, **kw):
+    return _load(BACKENDS[backend])(**kw)
 
 
-def make_agent(name: str, **kw):
-    # Also accept a full "module:Class" path for agents that live outside hotloop.
-    return _load(AGENTS.get(name, name))(**kw)
+def make_agent(agent: str, /, **kw):
+    # Positional-only, so agent options may include `name`. Also accepts a full
+    # "module:Class" path for agents that live outside hotloop.
+    return _load(AGENTS.get(agent, agent))(**kw)
