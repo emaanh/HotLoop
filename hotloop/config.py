@@ -5,7 +5,7 @@ import os
 APP_NAME = "hotloop"
 
 # Modal secret holding API keys (HF_TOKEN, OPENAI_API_KEY, ...).
-SECRET_NAMES = ["hotloop-keys"]
+SECRET_NAMES = ["hotloop-keys", "hotloop-vllm"]
 
 # Modal volumes.
 TASKS_VOLUME = "hotloop-tasks"    # public task files (visible to agents)

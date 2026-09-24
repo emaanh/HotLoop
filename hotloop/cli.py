@@ -169,6 +169,9 @@ def main():
     add = lambda name: sub.add_parser(name, parents=[common])
 
     add("deploy")
+    add("serve-deploy")
+    p = add("serve-prefetch"); p.add_argument("--variants", default="bf16,fp8,nvfp4")
+    p = add("serve-url"); p.add_argument("variant")
     p = add("models"); p.add_argument("--n", type=int, default=8)
     p = add("gen"); p.add_argument("--n-models", type=int, default=0); p.add_argument("--model-id", nargs="*", default=[])
     p.add_argument("--phases", default="prefill,decode")
@@ -198,6 +201,20 @@ def main():
         if not hasattr(args, k):
             setattr(args, k, v)
 
+    if args.cmd == "serve-deploy":
+        sys.exit(subprocess.call(["modal", "deploy", "-m", "hotloop.serving.vllm_app"], cwd=REPO))
+    if args.cmd == "serve-prefetch":
+        import modal
+        from hotloop.serving.vllm_app import APP_NAME, VARIANTS
+        fn = modal.Function.from_name(APP_NAME, "prefetch")
+        for v, path in zip(args.variants.split(","), fn.map(args.variants.split(","))):
+            print(f"{v}: {path}")
+        return
+    if args.cmd == "serve-url":
+        import modal
+        from hotloop.serving.vllm_app import APP_NAME
+        print(modal.Function.from_name(APP_NAME, f"serve_{args.variant}").get_web_url() + "/v1")
+        return
     if args.cmd == "deploy":
         if args.backend != "modal":
             sys.exit("deploy is for the modal backend; for local, build docker/Dockerfile")

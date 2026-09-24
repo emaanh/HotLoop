@@ -35,14 +35,21 @@ TOOL_DEFS = [_BASH, _WRITE, _SUBMIT]
 
 class OpenAIAgent:
     def __init__(self, model: str, effort: str | None = "medium", api: str = "responses",
-                 base_url: str | None = None, api_key_env: str = "OPENAI_API_KEY", max_turns: int = 150):
+                 base_url: str | None = None, api_key_env: str = "OPENAI_API_KEY", max_turns: int = 150,
+                 name: str | None = None, temperature: float | None = None, top_p: float | None = None,
+                 top_k: int | None = None, repetition_penalty: float | None = None):
         self.model = model
+        # Sampling (e.g. a model's recommended settings); None = server default.
+        self.sampling = {k: float(v) for k, v in (("temperature", temperature), ("top_p", top_p)) if v is not None}
+        self.extra_body = {k: v for k, v in (("top_k", None if top_k is None else int(top_k)),
+                                             ("repetition_penalty", None if repetition_penalty is None
+                                              else float(repetition_penalty))) if v is not None}
         self.effort = None if effort in (None, "", "none", "None") else effort
         self.api = api
         self.base_url = base_url
         self.api_key_env = api_key_env
         self.max_turns = int(max_turns)
-        self.name = model.replace("/", "_")
+        self.name = (name or model).replace("/", "_")
 
     def preflight(self) -> str:
         """One minimal request, so a bad key or empty balance fails before any GPU is used."""
@@ -52,7 +59,8 @@ class OpenAIAgent:
         if self.api == "responses":
             client.responses.create(model=self.model, input="ok", max_output_tokens=16)
         else:
-            client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": "ok"}], max_tokens=1)
+            client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": "ok"}], max_tokens=1,
+                                           tools=[{"type": "function", "function": t} for t in TOOL_DEFS])
         return "ok"
 
     # --- tools -------------------------------------------------------------------
@@ -80,18 +88,27 @@ class OpenAIAgent:
         state = {"prev": None, "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}],
                  "pending": [{"role": "user", "content": task}]}
         transcript = [{"role": "user", "content": task}]
-        usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "reasoning_tokens": 0}
+        usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "reasoning_tokens": 0,
+                 "api_seconds": 0.0, "api_calls": 0}
         turns, nudges = 0, 0
         stop = "budget"
         while turns < self.max_turns and env.seconds_left() > 0:
+            t_call = time.time()
             try:
                 texts, calls = step(client, state, usage)
             except BudgetExceeded:
                 break
             except Exception as e:
-                stop = f"error: api: {e!r}"[:300]
                 transcript.append({"role": "error", "content": repr(e)})
+                # Running out of context is the agent's own limit, not a provider failure.
+                if "context length" in str(e).lower() or "maximum context" in str(e).lower():
+                    stop = "context_exhausted"
+                else:
+                    stop = f"error: api: {e!r}"[:300]
                 break
+            finally:
+                usage["api_seconds"] += time.time() - t_call
+                usage["api_calls"] += 1
             transcript += [{"role": "assistant", "content": t} for t in texts if t]
             if not calls:
                 nudges += 1
@@ -126,9 +143,12 @@ class OpenAIAgent:
             if submitted or out_of_budget:
                 stop = "submitted" if submitted else "budget"
                 break
+        if usage["api_seconds"]:
+            usage["output_tokens_per_api_second"] = round(usage["output_tokens"] / usage["api_seconds"], 1)
         return AgentResult(stop_reason=stop, transcript=transcript, usage=usage,
                            metadata={"model": self.model, "effort": self.effort, "api": self.api,
-                                     "base_url": self.base_url, "turns": turns})
+                                     "base_url": self.base_url, "turns": turns, "sampling": self.sampling,
+                                     "extra_body": self.extra_body})
 
     # --- Responses API -----------------------------------------------------------
     def _responses_step(self, client, state, usage):
@@ -154,6 +174,9 @@ class OpenAIAgent:
     # --- Chat Completions API ----------------------------------------------------
     def _chat_step(self, client, state, usage):
         kw = {"reasoning_effort": self.effort} if self.effort else {}
+        kw.update(self.sampling)
+        if self.extra_body:
+            kw["extra_body"] = self.extra_body
         resp = client.chat.completions.create(model=self.model, messages=state["messages"],
                                               tools=[{"type": "function", "function": t} for t in TOOL_DEFS], **kw)
         if resp.usage:
