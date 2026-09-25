@@ -37,8 +37,12 @@ class OpenAIAgent:
     def __init__(self, model: str, effort: str | None = "medium", api: str = "responses",
                  base_url: str | None = None, api_key_env: str = "OPENAI_API_KEY", max_turns: int = 150,
                  name: str | None = None, temperature: float | None = None, top_p: float | None = None,
-                 top_k: int | None = None, repetition_penalty: float | None = None):
+                 top_k: int | None = None, repetition_penalty: float | None = None,
+                 max_tokens: int | None = None):
         self.model = model
+        # Output cap per request. Some providers (e.g. OpenRouter) reserve credit for the
+        # model's maximum output on every request when this is unset.
+        self.max_tokens = None if max_tokens in (None, "", "none") else int(max_tokens)
         # Sampling (e.g. a model's recommended settings); None = server default.
         self.sampling = {k: float(v) for k, v in (("temperature", temperature), ("top_p", top_p)) if v is not None}
         self.extra_body = {k: v for k, v in (("top_k", None if top_k is None else int(top_k)),
@@ -59,7 +63,9 @@ class OpenAIAgent:
         if self.api == "responses":
             client.responses.create(model=self.model, input="ok", max_output_tokens=16)
         else:
-            client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": "ok"}], max_tokens=1,
+            # Same output cap as real requests, so credit/limit problems show up here, not mid-run.
+            client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": "ok"}],
+                                           max_tokens=self.max_tokens or 1,
                                            tools=[{"type": "function", "function": t} for t in TOOL_DEFS])
         return "ok"
 
@@ -91,7 +97,7 @@ class OpenAIAgent:
         transcript.append({"role": "user", "content": task})
         usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "reasoning_tokens": 0,
                  "api_seconds": 0.0, "api_calls": 0}
-        turns, nudges = 0, 0
+        turns, nudges, truncations = 0, 0, 0
         stop = "budget"
         while turns < self.max_turns and env.seconds_left() > 0:
             t_call = time.time()
@@ -112,11 +118,22 @@ class OpenAIAgent:
                 usage["api_calls"] += 1
             transcript += [{"role": "assistant", "content": t} for t in texts if t]
             if not calls:
-                nudges += 1
-                if nudges > 3:
-                    stop = "no_tool_calls"
-                    break
-                self._add_user(state, "Keep working with the tools, or call `submit` if you are done.")
+                if state.get("truncated"):
+                    truncations += 1
+                    note = ("Your last response was cut off at the output-token limit before it finished. "
+                            "Think more briefly, and write large files in smaller pieces.")
+                    transcript.append({"role": "harness", "content": f"response truncated at output limit ({truncations})"})
+                    if truncations > 8:
+                        stop = "output_limit"
+                        break
+                else:
+                    nudges += 1
+                    note = "Keep working with the tools, or call `submit` if you are done."
+                    transcript.append({"role": "harness", "content": f"no tool call; nudged ({nudges})"})
+                    if nudges > 3:
+                        stop = "no_tool_calls"
+                        break
+                self._add_user(state, note)
                 continue
             outputs, submitted, out_of_budget = [], False, False
             for call_id, name, raw in calls:
@@ -154,10 +171,12 @@ class OpenAIAgent:
     # --- Responses API -----------------------------------------------------------
     def _responses_step(self, client, state, usage):
         kw = {"reasoning": {"effort": self.effort}} if self.effort else {}
+        state["truncated"] = False
         resp = client.responses.create(model=self.model, instructions=SYSTEM, input=state["pending"],
                                        tools=[{"type": "function", "strict": t["name"] != "bash", **t} for t in TOOL_DEFS],
                                        previous_response_id=state["prev"], **kw)
         state["prev"] = resp.id
+        state["truncated"] = getattr(resp, "status", "") == "incomplete"
         if resp.usage:
             usage["input_tokens"] += resp.usage.input_tokens
             usage["output_tokens"] += resp.usage.output_tokens
@@ -176,6 +195,8 @@ class OpenAIAgent:
     def _chat_step(self, client, state, usage):
         kw = {"reasoning_effort": self.effort} if self.effort else {}
         kw.update(self.sampling)
+        if self.max_tokens:
+            kw["max_tokens"] = self.max_tokens
         if self.extra_body:
             kw["extra_body"] = self.extra_body
         resp = client.chat.completions.create(model=self.model, messages=state["messages"],
@@ -186,6 +207,7 @@ class OpenAIAgent:
             details = getattr(resp.usage, "prompt_tokens_details", None)
             usage["cached_tokens"] += (getattr(details, "cached_tokens", 0) or 0) if details else 0
         msg = resp.choices[0].message
+        state["truncated"] = resp.choices[0].finish_reason == "length"
         state["messages"].append(msg.model_dump(exclude_none=True))
         calls = [(c.id, c.function.name, c.function.arguments) for c in (msg.tool_calls or [])]
         return [msg.content or ""], calls

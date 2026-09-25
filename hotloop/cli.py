@@ -139,6 +139,8 @@ def cmd_run(args, backend):
             print("usage:", json.dumps(rec["usage"]))
             if rec["stop_reason"] == "infra_error":
                 print("INFRASTRUCTURE ERROR (not scored; re-run):", rec.get("infra_error"))
+            elif not rec.get("eval"):
+                print("NOT SCORED (provider/API error; excluded from results):", rec["stop_reason"][:300])
             else:
                 _print_eval(rec["eval"])
     else:
@@ -151,6 +153,8 @@ def cmd_run(args, backend):
                   f"scored={rec.get('scored')}) saved to {d}")
             if rec["stop_reason"] == "infra_error":
                 print("INFRASTRUCTURE ERROR (not scored; re-run):", rec.get("infra_error"))
+            elif not rec.get("eval"):
+                print("NOT SCORED (provider/API error; excluded from results):", rec["stop_reason"][:300])
             else:
                 _print_eval(rec["eval"])
 
