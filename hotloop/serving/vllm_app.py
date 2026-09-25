@@ -1,7 +1,8 @@
 """Self-hosted open-weight agents: one vLLM server per model variant, on Modal.
 
-    modal deploy -m hotloop.serving.vllm_app      # or: hotloop serve-deploy
-    hotloop serve-prefetch                        # download weights into the volume once
+    hotloop serve-deploy                          # deploy (after code changes)
+    hotloop serve-prefetch --variants fp8         # download weights into the volume once
+    hotloop serve-url fp8                         # the variant's OpenAI-compatible base URL
 
 Each variant is its own web endpoint (OpenAI-compatible, API-key protected) and is
 capped at one container, so every agent episode pointed at it lands on the same
@@ -15,15 +16,25 @@ import modal
 APP_NAME = "hotloop-serve"
 VLLM_VERSION = "0.30.0"
 PORT = 8000
-SERVED_NAME = "qwen3-coder-next"
 
-# Quantization study: same model, same GPU, same server; only the weights differ.
+_QWEN_ARGS = ["--max-model-len", "262144", "--gpu-memory-utilization", "0.92", "--max-num-seqs", "32",
+              "--enable-auto-tool-choice", "--tool-call-parser", "qwen3_coder"]
+# GLM-5.2 flags follow NVIDIA's model card for the NVFP4 checkpoint (TP4 instead of 8 to
+# halve the cost: 465 GB of weights is ~116 GB per B200, leaving room for an fp8 KV cache).
+_GLM52_ARGS = ["--tensor-parallel-size", "4", "--enable-expert-parallel", "--trust-remote-code",
+               "--reasoning-parser", "glm45", "--tool-call-parser", "glm47", "--enable-auto-tool-choice",
+               "--kv-cache-dtype", "fp8_e4m3", "--max-model-len", "262144", "--gpu-memory-utilization", "0.90",
+               "--max-num-seqs", "32"]
+
 VARIANTS = {
-    "bf16": "Qwen/Qwen3-Coder-Next",
-    "fp8": "Qwen/Qwen3-Coder-Next-FP8",
-    "nvfp4": "RedHatAI/Qwen3-Coder-Next-NVFP4",
+    # Quantization study: same model, same single B200, same server; only the weights differ.
+    "bf16": {"repo": "Qwen/Qwen3-Coder-Next", "served": "qwen3-coder-next", "gpu": "B200", "args": _QWEN_ARGS},
+    "fp8": {"repo": "Qwen/Qwen3-Coder-Next-FP8", "served": "qwen3-coder-next", "gpu": "B200", "args": _QWEN_ARGS},
+    "nvfp4": {"repo": "RedHatAI/Qwen3-Coder-Next-NVFP4", "served": "qwen3-coder-next", "gpu": "B200",
+              "args": _QWEN_ARGS},
+    # Showcase: a frontier-class open model.
+    "glm52_nvfp4": {"repo": "nvidia/GLM-5.2-NVFP4", "served": "glm-5.2", "gpu": "B200:4", "args": _GLM52_ARGS},
 }
-GPU = "B200"  # 192 GB: fits BF16 on one card, and runs FP8/NVFP4 natively
 
 # The official vLLM image: ships the Blackwell kernels (FlashInfer, DeepGEMM, CUTLASS)
 # prebuilt, so startup doesn't JIT-compile them (which is slow and failed on B200).
@@ -48,46 +59,50 @@ secrets = [modal.Secret.from_name("hotloop-keys"), modal.Secret.from_name("hotlo
 def prefetch(variant: str) -> str:
     from huggingface_hub import snapshot_download
 
-    path = snapshot_download(VARIANTS[variant])
+    path = snapshot_download(VARIANTS[variant]["repo"])
     models_vol.commit()
     return path
 
 
 def _serve(variant: str):
-    cmd = [
-        "vllm", "serve", VARIANTS[variant],
-        "--served-model-name", SERVED_NAME,
-        "--host", "0.0.0.0", "--port", str(PORT),
-        "--max-model-len", "262144",          # the model's native context
-        "--gpu-memory-utilization", "0.92",
-        "--max-num-seqs", "32",
-        "--enable-auto-tool-choice", "--tool-call-parser", "qwen3_coder",
-        "--enable-prefix-caching",             # agents resend their whole history every turn
-        "--api-key", "$VLLM_API_KEY",
-    ]
+    v = VARIANTS[variant]
+    cmd = ["vllm", "serve", v["repo"], "--served-model-name", v["served"], "--host", "0.0.0.0",
+           "--port", str(PORT), *v["args"],
+           "--enable-prefix-caching",  # agents resend their whole history every turn
+           "--api-key", "$VLLM_API_KEY"]
     subprocess.Popen(" ".join(cmd), shell=True)
 
 
-SERVER = dict(image=image, gpu=GPU, cpu=16, memory=65536, secrets=secrets, volumes={"/models": models_vol},
-              timeout=6 * 3600, scaledown_window=15 * 60, max_containers=1)
+def _server_kwargs(variant: str) -> dict:
+    gpu = VARIANTS[variant]["gpu"]
+    n = int(gpu.split(":")[1]) if ":" in gpu else 1
+    return dict(image=image, gpu=gpu, cpu=16 * n, memory=65536 * n, secrets=secrets,
+                volumes={"/models": models_vol}, timeout=6 * 3600, scaledown_window=15 * 60, max_containers=1)
 
 
-@app.function(**SERVER)
+@app.function(**_server_kwargs("bf16"))
 @modal.concurrent(max_inputs=64)
 @modal.web_server(port=PORT, startup_timeout=45 * 60)
 def serve_bf16():
     _serve("bf16")
 
 
-@app.function(**SERVER)
+@app.function(**_server_kwargs("fp8"))
 @modal.concurrent(max_inputs=64)
 @modal.web_server(port=PORT, startup_timeout=45 * 60)
 def serve_fp8():
     _serve("fp8")
 
 
-@app.function(**SERVER)
+@app.function(**_server_kwargs("nvfp4"))
 @modal.concurrent(max_inputs=64)
 @modal.web_server(port=PORT, startup_timeout=45 * 60)
 def serve_nvfp4():
     _serve("nvfp4")
+
+
+@app.function(**_server_kwargs("glm52_nvfp4"))
+@modal.concurrent(max_inputs=64)
+@modal.web_server(port=PORT, startup_timeout=60 * 60)
+def serve_glm52_nvfp4():
+    _serve("glm52_nvfp4")
