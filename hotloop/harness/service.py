@@ -7,11 +7,10 @@ from hotloop.bench.store import Store, gpu_key
 
 
 def get_peaks(cache_dir: str | None = None) -> dict:
-    import torch
-
     from hotloop.harness import roofline
+    from hotloop.harness.device import get_device
 
-    path = os.path.join(cache_dir, f"peaks_{gpu_key(torch.cuda.get_device_name())}.json") if cache_dir else None
+    path = os.path.join(cache_dir, f"peaks_{gpu_key(get_device().device_name())}.json") if cache_dir else None
     if path and os.path.exists(path):
         with open(path) as f:
             return json.load(f)

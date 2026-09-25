@@ -38,11 +38,20 @@ class OpenAIAgent:
                  base_url: str | None = None, api_key_env: str = "OPENAI_API_KEY", max_turns: int = 150,
                  name: str | None = None, temperature: float | None = None, top_p: float | None = None,
                  top_k: int | None = None, repetition_penalty: float | None = None,
-                 max_tokens: int | None = None):
+                 max_tokens: int | None = None, provider: str | None = None, quantization: str | None = None):
         self.model = model
         # Output cap per request. Some providers (e.g. OpenRouter) reserve credit for the
         # model's maximum output on every request when this is unset.
         self.max_tokens = None if max_tokens in (None, "", "none") else int(max_tokens)
+        # Hosted open models (OpenRouter): pin who serves the model and at what precision,
+        # with no silent fallback, so API results are reproducible and comparable.
+        if provider or quantization:
+            pin = {"allow_fallbacks": False}
+            if provider:
+                pin["order"] = [p.strip() for p in provider.split(",")]
+            if quantization:
+                pin["quantizations"] = [q.strip() for q in quantization.split(",")]
+            self.extra_body["provider"] = pin
         # Sampling (e.g. a model's recommended settings); None = server default.
         self.sampling = {k: float(v) for k, v in (("temperature", temperature), ("top_p", top_p)) if v is not None}
         self.extra_body = {k: v for k, v in (("top_k", None if top_k is None else int(top_k)),
@@ -206,6 +215,10 @@ class OpenAIAgent:
             usage["output_tokens"] += resp.usage.completion_tokens
             details = getattr(resp.usage, "prompt_tokens_details", None)
             usage["cached_tokens"] += (getattr(details, "cached_tokens", 0) or 0) if details else 0
+        served_by = (resp.model_extra or {}).get("provider")  # OpenRouter reports the serving provider
+        if served_by:
+            usage.setdefault("served_by", {})
+            usage["served_by"][served_by] = usage["served_by"].get(served_by, 0) + 1
         msg = resp.choices[0].message
         state["truncated"] = resp.choices[0].finish_reason == "length"
         state["messages"].append(msg.model_dump(exclude_none=True))

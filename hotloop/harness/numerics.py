@@ -32,9 +32,10 @@ def flat(x) -> list:
     return tree_flatten(x)[0]
 
 
-def run_ref64(ref, inputs, mutated=()):
-    """Outputs of the reference in fp64, followed by any inputs it updates in place."""
-    ins = upcast_inputs([t.clone() for t in inputs])
+def run_ref64(ref, inputs, mutated=(), device: str | None = None):
+    """Outputs of the reference in fp64, followed by any inputs it updates in place. `device`
+    is where fp64 runs (the CPU on Apple GPUs, which have no fp64)."""
+    ins = upcast_inputs([t.clone().to(device) if device else t.clone() for t in inputs])
     with torch.no_grad(), Upcast():
         return flat(ref(*ins)) + [ins[i] for i in mutated]
 
@@ -45,9 +46,16 @@ def run_native(ref, inputs, mutated=()):
         return flat(ref(*ins)) + [ins[i] for i in mutated]
 
 
+def _f64_device(t: torch.Tensor) -> torch.device:
+    """Where fp64 comparisons can run: the tensor's own device, or the CPU for Apple GPUs."""
+    return torch.device("cpu") if t.device.type == "mps" else t.device
+
+
 def _errors(x: torch.Tensor, r: torch.Tensor) -> tuple[float, float]:
+    dev = _f64_device(r)
+    x, r = x.to(dev), r.to(dev)
     finite = torch.isfinite(r)
-    d = (x.double() - r)[finite]
+    d = (x.double() - r.double())[finite]
     if d.numel() == 0:
         return 0.0, 0.0
     max_abs = d.abs().max().item()
@@ -64,7 +72,8 @@ def calibrate(native: list, ref64: list) -> list[dict]:
             continue
         e_abs, e_rel = _errors(n, r)
         eps = torch.finfo(n.dtype).eps
-        finite = r[torch.isfinite(r)]
+        rr = r.to(_f64_device(r))
+        finite = rr[torch.isfinite(rr)].double()
         scale = finite.abs().mean().item() if finite.numel() else 1.0
         tols.append({
             "exact": False,
@@ -89,9 +98,10 @@ def compare(sol: list, ref: list, native: list, tols: list[dict]) -> dict:
             if not torch.equal(s.cpu(), n.cpu()):
                 return {"ok": False, "reason": f"output {i}: integer/bool output differs"}
             continue
-        s, r = s.to(r.device), r
+        dev = _f64_device(r)
+        s, r = s.to(dev), r.to(dev)
         finite = torch.isfinite(r)
-        bad_nonfinite = (~finite & ~((s.double() == r) | (torch.isnan(s) & torch.isnan(r)))).any()
+        bad_nonfinite = (~finite & ~((s.double() == r.double()) | (torch.isnan(s) & torch.isnan(r)))).any()
         if bad_nonfinite or (~torch.isfinite(s[finite])).any():
             return {"ok": False, "reason": f"output {i}: inf/nan pattern differs from reference"}
         e_abs, e_rel = _errors(s, r)

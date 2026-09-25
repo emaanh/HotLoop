@@ -21,6 +21,7 @@ import traceback
 import torch
 
 from hotloop.harness import ban
+from hotloop.harness.device import get_device
 from hotloop.harness.inputs import make_inputs
 from hotloop.harness.numerics import flat
 from hotloop.harness.task import load_shape
@@ -41,12 +42,7 @@ def _drop_privileges():
 def _integrity_snapshot() -> dict:
     """Identity of the functions the timing and I/O paths rely on."""
     import hotloop.harness.runner as me
-    items = {
-        "Event.record": torch.cuda.Event.record, "Event.elapsed_time": torch.cuda.Event.elapsed_time,
-        "Event.synchronize": torch.cuda.Event.synchronize, "synchronize": torch.cuda.synchronize,
-        "CUDAGraph.replay": torch.cuda.CUDAGraph.replay, "Tensor.copy_": torch.Tensor.copy_,
-        "Tensor.zero_": torch.Tensor.zero_, "save": torch.save, "make_inputs": make_inputs,
-    }
+    items = {**get_device().integrity_items(), "make_inputs": make_inputs}
     snap = {k: id(v) for k, v in items.items()}
     for k in dir(me):
         v = getattr(me, k)
@@ -73,8 +69,8 @@ class Runner:
             if not callable(getattr(mod, "solution", None)):
                 raise RuntimeError("solution.py must define a function `solution(*inputs)`")
             self.solution = mod.solution
-        l2 = torch.cuda.get_device_properties(0).L2_cache_size
-        self.flush_buf = torch.empty(4 * l2, dtype=torch.uint8, device="cuda")
+        self.dev = get_device()
+        self.flush = self.dev.make_flush()
 
     # --- helpers ---------------------------------------------------------------
     def _call(self, fn, inputs):
@@ -88,7 +84,7 @@ class Runner:
     def _fn_for(self, shape):
         if self.kind == "solution":
             return self.solution
-        ref = shape.reference()
+        ref = shape.reference(self.dev.torch_device)
         if self.kind == "compile":
             return torch.compile(ref, dynamic=False)
         return ref
@@ -97,40 +93,34 @@ class Runner:
     def prepare(self, sid: str, shape_dir: str, seed: int):
         shape = load_shape(shape_dir)
         fn = self._fn_for(shape)
-        static_in = make_inputs(shape.meta, shape.exact, seed)
-        # Warm up outside capture (JIT compilation, autotuning, lazy init).
-        side = torch.cuda.Stream()
-        side.wait_stream(torch.cuda.current_stream())
-        with torch.cuda.stream(side):
-            for _ in range(2):
-                self._call(fn, static_in)
-        torch.cuda.current_stream().wait_stream(side)
-        torch.cuda.synchronize()
+        static_in = make_inputs(shape.meta, shape.exact, seed, device=self.dev.torch_device)
         mutated = shape.meta.get("mutated_inputs", [])
-        graph = torch.cuda.CUDAGraph()
         try:
-            with torch.cuda.graph(graph):
-                static_out = self._call(fn, static_in)
+            rep = self.dev.capture(lambda ins: self._call(fn, ins), static_in, flat)
         except ban.BanViolation:
             raise
         except Exception as e:
+            if not self.dev.graph_capture:
+                raise
             raise RuntimeError(
                 "CUDA graph capture failed. Kernels must launch on the current stream "
                 "(e.g. at::cuda::getCurrentCUDAStream() in C++), must not synchronize "
                 f"with the host, and must not allocate host memory. Error: {e}") from e
-        torch.cuda.synchronize()
+        self.shapes[sid] = {"shape": shape, "fn": fn, "rep": rep, "in": static_in, "mutated": mutated}
+        return {"n_outputs": len(self._outputs(sid))}
+
+    def _outputs(self, sid: str) -> list:
         # Inputs the reference updates in place (e.g. a KV cache) are checked like outputs.
-        outs = flat(static_out) + [static_in[i] for i in mutated]
-        self.shapes[sid] = {"shape": shape, "fn": fn, "graph": graph, "in": static_in, "out": outs, "mutated": mutated}
-        return {"n_outputs": len(self.shapes[sid]["out"])}
+        st = self.shapes[sid]
+        return st["rep"].outputs + [st["in"][i] for i in st["mutated"]]
 
     def correct(self, sid: str, cases: list[dict]):
         st = self.shapes[sid]
         shape = st["shape"]
         for c in cases:
-            inputs = make_inputs(shape.meta, shape.exact, c["seed"], c["variant"])
+            inputs = make_inputs(shape.meta, shape.exact, c["seed"], c["variant"], device=self.dev.torch_device)
             out = flat(self._call(st["fn"], inputs)) + [inputs[i] for i in st["mutated"]]
-            torch.cuda.synchronize()
+            self.dev.synchronize()
             torch.save([o.detach().cpu() if isinstance(o, torch.Tensor) else o for o in out],
                        os.path.join(self.out_dir, f"{sid}__{c['name']}.pt"))
         return {"n": len(cases)}
@@ -140,44 +130,23 @@ class Runner:
         shape = st["shape"]
         times = []
         for seed, keep in zip(seeds, save):
-            new = make_inputs(shape.meta, shape.exact, seed)
+            new = make_inputs(shape.meta, shape.exact, seed, device=self.dev.torch_device)
             for buf, x in zip(st["in"], new):
                 buf.copy_(x)
             del new
-            self.flush_buf.zero_()
-            torch.cuda.synchronize()
-            start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            start.record()
-            st["graph"].replay()
-            end.record()
-            end.synchronize()
-            torch.cuda.synchronize()
-            times.append(start.elapsed_time(end))
+            self.flush()
+            self.dev.synchronize()
+            start, stop = self.dev.timer()
+            start()
+            st["rep"].replay()
+            times.append(stop())
             if keep:
-                torch.save([o.detach().cpu() for o in st["out"]], os.path.join(self.out_dir, f"{sid}__t{seed}.pt"))
+                torch.save([o.detach().cpu() for o in self._outputs(sid)], os.path.join(self.out_dir, f"{sid}__t{seed}.pt"))
         return {"times_ms": times}
 
     def kernels(self, sid: str):
-        """Profile a few replays; report per-kernel GPU time and host<->device copies."""
-        from torch.profiler import ProfilerActivity, profile
-        st = self.shapes[sid]
-        reps = 3
-        with profile(activities=[ProfilerActivity.CUDA]) as prof:
-            for _ in range(reps):
-                st["graph"].replay()
-            torch.cuda.synchronize()
-        times, copies = {}, set()
-        for e in prof.profiler.kineto_results.events():
-            if "cuda" not in str(e.device_type()).lower():
-                continue
-            n = e.name()
-            if n.startswith("Memcpy HtoD") or n.startswith("Memcpy DtoH"):
-                copies.add(n)
-            elif not n.startswith(("Memcpy", "Memset")):
-                times[n] = times.get(n, 0.0) + e.duration_ns() / 1e3 / reps
-        ranked = sorted(times.items(), key=lambda kv: -kv[1])
-        return {"kernels": [n for n, _ in ranked], "kernel_us": [round(t, 2) for _, t in ranked],
-                "host_copies": sorted(copies)}
+        """Per-kernel GPU time and host<->device copies over a few replays (where the platform exposes them)."""
+        return self.dev.profile_kernels(self.shapes[sid]["rep"])
 
     def integrity(self):
         now = _integrity_snapshot()
@@ -186,7 +155,7 @@ class Runner:
 
     def release(self, sid: str):
         self.shapes.pop(sid, None)
-        torch.cuda.empty_cache()
+        self.dev.empty_cache()
         return {}
 
 

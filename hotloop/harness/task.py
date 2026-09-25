@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 
 import torch
@@ -21,9 +22,14 @@ class Shape:
             self._exact = torch.load(os.path.join(self.dir, "exact.pt"))
         return self._exact
 
-    def reference(self):
+    def reference(self, device: str | None = None):
+        """The reference function. Traced references hardcode the CUDA device for tensors they
+        create (e.g. torch.arange(..., device=...)); `device` retargets them (mps, cpu)."""
+        src = self.src
+        if device and device != "cuda":
+            src = re.sub(r"device\(type='cuda'(, index=\d+)?\)", f"device(type='{device}')", src)
         ns: dict = {}
-        exec(compile(self.src, f"<reference {self.sid}>", "exec"), ns)
+        exec(compile(src, f"<reference {self.sid}>", "exec"), ns)
         return ns["reference"]
 
 

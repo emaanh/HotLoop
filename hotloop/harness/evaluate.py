@@ -22,6 +22,7 @@ import torch
 
 import hotloop
 from hotloop.harness import ban, numerics, roofline
+from hotloop.harness.device import get_device
 from hotloop.harness.inputs import VARIANTS, make_inputs
 from hotloop.harness.task import Shape, load_shape
 
@@ -250,7 +251,9 @@ def evaluate(
         info = result["shapes"][s.sid]
         if s.sid not in plans or info.get("reason"):
             continue
-        ref = s.reference()
+        dev = get_device()
+        ref = s.reference(dev.torch_device)
+        ref64_fn = s.reference(dev.ref64_device)
         mutated = s.meta.get("mutated_inputs", [])
         n_returned = len(s.meta["outputs"]) - len(mutated)
         verdicts, timed_tols = [], None
@@ -258,7 +261,7 @@ def evaluate(
             for c in plans[s.sid]["cases"]:
                 inputs = make_inputs(s.meta, s.exact, c["seed"], c["variant"])
                 native = numerics.run_native(ref, inputs, mutated)
-                ref64 = numerics.run_ref64(ref, inputs, mutated)
+                ref64 = numerics.run_ref64(ref64_fn, inputs, mutated, device=dev.ref64_device)
                 tols = numerics.calibrate(native, ref64)
                 if c["variant"] == "normal" and timed_tols is None:
                     timed_tols = [t if t["exact"] else {**t, "abs": t["abs"] + t["ref_abs"], "rel": t["rel"] + t["ref_rel"]}
@@ -281,7 +284,7 @@ def evaluate(
         except Exception as e:
             info["reason"] = f"verification error: {type(e).__name__}: {e}"
             continue
-        torch.cuda.empty_cache()
+        dev.empty_cache()
         bad = [v for v in verdicts if not v["ok"]]
         info["correct"] = not bad
         info["max_rel_err"] = max((v.get("rel", 0.0) for v in verdicts), default=0.0)

@@ -29,26 +29,22 @@ def _rel_diff(a: list, b: list) -> float:
 
 
 def graph_time_ms(fn, inputs, iters: int = 20) -> float:
-    flush = torch.empty(4 * torch.cuda.get_device_properties(0).L2_cache_size, dtype=torch.uint8, device="cuda")
+    """Median time of `fn` on `inputs`, replayed the way scoring does it (CUDA graph on NVIDIA,
+    eager on Apple GPUs) with a cache flush before every run."""
+    from hotloop.harness.device import get_device
+
+    dev = get_device()
+    flush = dev.make_flush()
     with torch.no_grad():
-        side = torch.cuda.Stream()
-        side.wait_stream(torch.cuda.current_stream())
-        with torch.cuda.stream(side):
-            fn(*inputs)
-            fn(*inputs)
-        torch.cuda.current_stream().wait_stream(side)
-        g = torch.cuda.CUDAGraph()
-        with torch.cuda.graph(g):
-            fn(*inputs)
-    times = []
-    for _ in range(iters):
-        flush.zero_()
-        s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        s.record()
-        g.replay()
-        e.record()
-        e.synchronize()
-        times.append(s.elapsed_time(e))
+        rep = dev.capture(lambda ins: fn(*ins), inputs, lambda x: x)
+        times = []
+        for _ in range(iters):
+            flush()
+            dev.synchronize()
+            start, stop = dev.timer()
+            start()
+            rep.replay()
+            times.append(stop())
     return sorted(times)[len(times) // 2]
 
 
@@ -59,7 +55,10 @@ def _resample(meta: dict, exact: dict, base: list, seed: int, kind: str) -> list
 
 
 def filter_shape(shape, peaks: dict) -> dict:
-    ref = shape.reference()
+    from hotloop.harness.device import get_device
+
+    dev = get_device()
+    ref = shape.reference(dev.torch_device)
     meta, exact = shape.meta, shape.exact
     mutated = meta.get("mutated_inputs", [])
     run = lambda ins: numerics.run_native(ref, ins, mutated)
@@ -96,5 +95,5 @@ def filter_shape(shape, peaks: dict) -> dict:
     stats["keep"] = not reasons
     stats["drop_reasons"] = reasons
     torch._dynamo.reset()
-    torch.cuda.empty_cache()
+    dev.empty_cache()
     return stats

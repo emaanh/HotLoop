@@ -22,7 +22,10 @@ def _effective_std(spec) -> float:
     return max(std, 1e-3)
 
 
-def make_inputs(meta: dict, exact: dict, seed: int, variant: str = "normal", device: str = "cuda") -> list:
+def make_inputs(meta: dict, exact: dict, seed: int, variant: str = "normal", device: str | None = None) -> list:
+    if device is None:
+        from hotloop.harness.device import get_device
+        device = get_device().torch_device
     g = torch.Generator(device=device).manual_seed(seed)
     out = []
     for spec in meta["inputs"]:

@@ -12,23 +12,13 @@ from torch.utils._python_dispatch import TorchDispatchMode
 aten = torch.ops.aten
 
 
-def _time_ms(fn, iters=10) -> float:
-    fn()
-    torch.cuda.synchronize()
-    times = []
-    for _ in range(iters):
-        s, e = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        s.record()
-        fn()
-        e.record()
-        e.synchronize()
-        times.append(s.elapsed_time(e))
-    return sorted(times)[len(times) // 2]
-
-
 def measure_peaks() -> dict:
-    """Achievable peaks: FLOP/s per dtype and DRAM bandwidth in bytes/s."""
-    peaks = {"gpu": torch.cuda.get_device_name()}
+    """Achievable peaks on the current device: FLOP/s per dtype and memory bandwidth in bytes/s."""
+    from hotloop.harness.device import get_device
+
+    dev = get_device()
+    d = dev.torch_device
+    peaks = {"gpu": dev.device_name(), "device": dev.name}
     prev_tf32 = torch.backends.cuda.matmul.allow_tf32
     torch.backends.cuda.matmul.allow_tf32 = False
     # Best over several sizes: power-limited GPUs (e.g. L4) clock down on the largest GEMMs.
@@ -36,20 +26,20 @@ def measure_peaks() -> dict:
                          (torch.float32, (2048, 4096))):
         best = 0.0
         for n in sizes:
-            a = torch.randn(n, n, device="cuda", dtype=dtype)
-            b = torch.randn(n, n, device="cuda", dtype=dtype)
-            best = max(best, 2 * n**3 / (_time_ms(lambda: a @ b) * 1e-3))
+            a = torch.randn(n, n, device=d, dtype=dtype)
+            b = torch.randn(n, n, device=d, dtype=dtype)
+            best = max(best, 2 * n**3 / (dev.time_ms(lambda: a @ b) * 1e-3))
             del a, b
         peaks[str(dtype).removeprefix("torch.")] = best
     torch.backends.cuda.matmul.allow_tf32 = prev_tf32
     best = 0.0
-    for n in (1 << 26, 1 << 28):  # 256 MiB and 1 GiB, both far larger than L2
-        x = torch.empty(n, device="cuda", dtype=torch.float32)
+    for n in (1 << 26, 1 << 28):  # 256 MiB and 1 GiB, both far larger than any on-chip cache
+        x = torch.empty(n, device=d, dtype=torch.float32)
         y = torch.empty_like(x)
-        best = max(best, 2 * n * 4 / (_time_ms(lambda: y.copy_(x)) * 1e-3))
+        best = max(best, 2 * n * 4 / (dev.time_ms(lambda: y.copy_(x)) * 1e-3))
         del x, y
     peaks["bandwidth"] = best
-    torch.cuda.empty_cache()
+    dev.empty_cache()
     return peaks
 
 
