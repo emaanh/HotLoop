@@ -44,9 +44,10 @@ class BudgetedEnvironment:
         self._env.write_text(path, content)
 
 
-def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: bool = True, log=print) -> dict:
+def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: bool = True, log=print,
+                options: dict | None = None) -> dict:
     t_open = time.time()
-    env = backend.open_environment(task_id, gpu=gpu, minutes=minutes)
+    env = backend.open_environment(task_id, gpu=gpu, minutes=minutes, options=options)
     t0 = time.time()  # the budget starts once the workspace is ready, not while a GPU is being provisioned
     deadline = t0 + minutes * 60
     result: list[AgentResult] = []
@@ -94,7 +95,7 @@ def run_episode(backend, agent, task_id: str, gpu: str, minutes: float, score: b
         "run_id": f"{time.strftime('%Y%m%d-%H%M%S')}_{agent.name}_{task_id}",
         "task_id": task_id, "gpu": gpu, "backend": backend.name, "agent": agent.name,
         "agent_metadata": res.metadata, "stop_reason": res.stop_reason, "usage": res.usage,
-        "budget_minutes": minutes, "agent_minutes": round((min(time.time(), deadline) - t0) / 60, 1),
+        "task_options": options or {}, "budget_minutes": minutes, "agent_minutes": round((min(time.time(), deadline) - t0) / 60, 1),
         "startup_minutes": round((t0 - t_open) / 60, 1),
         "solution": solution or "", "snapshot": snapshot, "infra_error": infra_error,
     }

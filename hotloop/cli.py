@@ -107,6 +107,8 @@ def cmd_run(args, backend):
     from hotloop.bench.registry import make_agent
 
     kwargs = _agent_kwargs(args.agent_arg)
+    # Task options change the workspace (e.g. profile_tool=false hides the profile helper in TASK.md).
+    options = {k: v.lower() not in ("false", "0", "no", "off") for k, v in _agent_kwargs(args.task_option).items()}
     if args.task:
         tasks = args.task
     else:
@@ -125,7 +127,7 @@ def cmd_run(args, backend):
             sys.exit(f"agent preflight failed, nothing launched: {check}")
         calls = {}
         for i, t in enumerate(tasks):
-            calls[f"{t}#{i}"] = backend.spawn_episode(args.agent, kwargs, t, args.gpu, args.minutes)
+            calls[f"{t}#{i}"] = backend.spawn_episode(args.agent, kwargs, t, args.gpu, args.minutes, options)
         for t, c in calls.items():
             print(f"[spawned] {t}  call={c.object_id}")
         for t, c in calls.items():
@@ -146,7 +148,7 @@ def cmd_run(args, backend):
     else:
         agent = make_agent(args.agent, **kwargs)
         for t in tasks:
-            ep = run_episode(backend, agent, t, args.gpu, args.minutes)
+            ep = run_episode(backend, agent, t, args.gpu, args.minutes, options=options)
             d = save_episode(ep, os.path.join(REPO, "runs"))
             rec = ep["record"]
             print(f"\n=== {t}  ({rec['agent']}, {rec['stop_reason']}, {rec['agent_minutes']} min, "
@@ -199,6 +201,7 @@ def main():
     p.add_argument("--phase", choices=["prefill", "decode"], help="with no --task: only tasks of this phase")
     p.add_argument("--minutes", type=float, default=30)
     p.add_argument("--repeats", type=int, default=1, help="independent runs per task")
+    p.add_argument("--task-option", action="append", help="workspace option key=value, e.g. profile_tool=false")
     p.add_argument("--local-agent", action="store_true", help="(modal) run the agent loop on this machine")
     args = ap.parse_args()
     for k, v in (("backend", "modal"), ("gpu", config.DEV_GPU), ("root", "~/.hotloop"), ("isolation", "docker")):

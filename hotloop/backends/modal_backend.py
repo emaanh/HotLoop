@@ -67,7 +67,7 @@ class ModalBackend:
         return modal.Function.from_name(self.app_name, name)
 
     # --- agent episodes ----------------------------------------------------------
-    def open_environment(self, task_id: str, gpu: str, minutes: float) -> ModalEnvironment:
+    def open_environment(self, task_id: str, gpu: str, minutes: float, options: dict | None = None) -> ModalEnvironment:
         from hotloop.backends.modal_app import gpu_image, tasks_vol
 
         sb = modal.Sandbox.create(
@@ -81,7 +81,7 @@ class ModalBackend:
             res = env.exec(f"mkdir -p task && cp -r {config.MOUNT_TASKS}/{task_id}/* task/", timeout=120)
             if res.exit_code != 0:
                 raise RuntimeError(f"could not copy task {task_id}: {res.output}")
-            prepare_workspace(env, gpu, minutes)
+            prepare_workspace(env, gpu, minutes, options)
         except Exception:
             env.close()
             raise
@@ -98,8 +98,9 @@ class ModalBackend:
     def preflight(self, agent: str, agent_kwargs: dict) -> str:
         return self._fn("preflight_agent").remote(agent, agent_kwargs)
 
-    def spawn_episode(self, agent: str, agent_kwargs: dict, task_id: str, gpu: str, minutes: float):
-        return self._fn("run_episode").spawn(agent, agent_kwargs, task_id, gpu, minutes)
+    def spawn_episode(self, agent: str, agent_kwargs: dict, task_id: str, gpu: str, minutes: float,
+                      options: dict | None = None):
+        return self._fn("run_episode").spawn(agent, agent_kwargs, task_id, gpu, minutes, options)
 
     def results(self, since: str = "") -> list[dict]:
         return self._fn("collect_results").remote(since)

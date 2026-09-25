@@ -130,7 +130,7 @@ class LocalBackend:
         return _parse_result(out)
 
     # --- agent episodes ----------------------------------------------------------
-    def open_environment(self, task_id: str, gpu: str, minutes: float):
+    def open_environment(self, task_id: str, gpu: str, minutes: float, options: dict | None = None):
         src = self.store.task_dir(task_id)
         if not os.path.isdir(src):
             raise FileNotFoundError(f"unknown task {task_id}")
@@ -149,7 +149,7 @@ class LocalBackend:
             res = env.exec(copy, timeout=120)
             if res.exit_code != 0:
                 raise RuntimeError(res.output)
-            prepare_workspace(env, gpu, minutes)
+            prepare_workspace(env, gpu, minutes, options)
         except Exception:
             env.close()
             raise

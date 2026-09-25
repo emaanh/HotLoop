@@ -128,12 +128,13 @@ def preflight_agent(agent: str, agent_kwargs: dict) -> str:
 
 
 @app.function(image=cpu_image, secrets=secrets, timeout=6 * 3600, volumes={config.MOUNT_RUNS: runs_vol})
-def run_episode(agent: str, agent_kwargs: dict, task_id: str, gpu: str, minutes: float) -> dict:
+def run_episode(agent: str, agent_kwargs: dict, task_id: str, gpu: str, minutes: float,
+                options: dict | None = None) -> dict:
     from hotloop.backends.modal_backend import ModalBackend
     from hotloop.bench.episode import run_episode as _run, save_episode
     from hotloop.bench.registry import make_agent
 
-    ep = _run(ModalBackend(), make_agent(agent, **agent_kwargs), task_id, gpu, minutes)
+    ep = _run(ModalBackend(), make_agent(agent, **agent_kwargs), task_id, gpu, minutes, options=options)
     save_episode(ep, config.MOUNT_RUNS)
     runs_vol.commit()
     return ep["record"]

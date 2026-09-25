@@ -36,12 +36,20 @@ torch.compile baselines).
 (Nsight Systems: timeline) are installed.
 """
 
+PROFILE_TOOL = """- `python -m hotloop.harness.profile [solution.py] [--shape SID] [--full]` - Nsight Compute on your \
+kernels only (one call to solution() after warm-up): per kernel, time, memory and compute throughput vs peak, \
+occupancy, launch configuration, ncu's optimization hints, and a verdict on what bounds it (~20-60 s).
+"""
+
 
 def _fmt(dims) -> str:
     return "[" + ", ".join(map(str, dims)) + "]"
 
 
-def render_task_md(task: dict, meta: dict, reference: str, workdir: str, gpu: str, minutes: float) -> str:
+def render_task_md(task: dict, meta: dict, reference: str, workdir: str, gpu: str, minutes: float,
+                   options: dict | None = None) -> str:
+    options = options or {}
+    tools_extra = PROFILE_TOOL if options.get("profile_tool", True) else ""
     public = task.get("public_shapes") or [meta["shape_id"]]
     sym = task.get("symbolic_shapes")
     if sym:
@@ -81,7 +89,7 @@ they differ only in the sizes baked into reshapes):
 Outputs:
 {outputs}
 
-{RULES}"""
+{RULES}{tools_extra}"""
 
 
 def starter(task: dict, meta: dict) -> str:
@@ -97,7 +105,7 @@ def solution({args}):
 '''
 
 
-def prepare_workspace(env: Environment, gpu: str, minutes: float) -> None:
+def prepare_workspace(env: Environment, gpu: str, minutes: float, options: dict | None = None) -> None:
     """Called by a backend after it copied the public task directory to <workdir>/task."""
     wd = env.workdir
     res = env.exec(f"ls {wd}/task/shapes", timeout=60)
@@ -107,5 +115,5 @@ def prepare_workspace(env: Environment, gpu: str, minutes: float) -> None:
     sid = (task.get("public_shapes") or res.output.split())[0]
     meta = json.loads(env.read_text(os.path.join(wd, "task", "shapes", sid, "meta.json")))
     ref = env.read_text(os.path.join(wd, "task", "shapes", sid, "reference.py"))
-    env.write_text(os.path.join(wd, "TASK.md"), render_task_md(task, meta, ref, wd, gpu, minutes))
+    env.write_text(os.path.join(wd, "TASK.md"), render_task_md(task, meta, ref, wd, gpu, minutes, options))
     env.write_text(os.path.join(wd, "solution.py"), starter(task, meta))

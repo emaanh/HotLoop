@@ -18,7 +18,7 @@ class Backend(Protocol):
     name: str
 
     # --- agent episodes ----------------------------------------------------------
-    def open_environment(self, task_id: str, gpu: str, minutes: float) -> BackendEnvironment:
+    def open_environment(self, task_id: str, gpu: str, minutes: float, options: dict | None = None) -> BackendEnvironment:
         """A fresh GPU machine with no network, the public task at <workdir>/task,
         and TASK.md + solution.py prepared (see bench.workspace.prepare_workspace)."""
         ...
