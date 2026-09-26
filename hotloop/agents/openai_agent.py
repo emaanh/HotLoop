@@ -43,6 +43,11 @@ class OpenAIAgent:
         # Output cap per request. Some providers (e.g. OpenRouter) reserve credit for the
         # model's maximum output on every request when this is unset.
         self.max_tokens = None if max_tokens in (None, "", "none") else int(max_tokens)
+        # Sampling (e.g. a model's recommended settings); None = server default.
+        self.sampling = {k: float(v) for k, v in (("temperature", temperature), ("top_p", top_p)) if v is not None}
+        self.extra_body = {k: v for k, v in (("top_k", None if top_k is None else int(top_k)),
+                                             ("repetition_penalty", None if repetition_penalty is None
+                                              else float(repetition_penalty))) if v is not None}
         # Hosted open models (OpenRouter): pin who serves the model and at what precision,
         # with no silent fallback, so API results are reproducible and comparable.
         if provider or quantization:
@@ -52,11 +57,6 @@ class OpenAIAgent:
             if quantization:
                 pin["quantizations"] = [q.strip() for q in quantization.split(",")]
             self.extra_body["provider"] = pin
-        # Sampling (e.g. a model's recommended settings); None = server default.
-        self.sampling = {k: float(v) for k, v in (("temperature", temperature), ("top_p", top_p)) if v is not None}
-        self.extra_body = {k: v for k, v in (("top_k", None if top_k is None else int(top_k)),
-                                             ("repetition_penalty", None if repetition_penalty is None
-                                              else float(repetition_penalty))) if v is not None}
         self.effort = None if effort in (None, "", "none", "None") else effort
         self.api = api
         self.base_url = base_url
