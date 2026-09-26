@@ -31,6 +31,19 @@ PREFILL_SHAPES = [(1, 2048), (4, 1024), (3, 777),
 # decode: (batch, tokens already in the KV cache); one new token per sequence
 DECODE_SHAPES = [(16, 2048), (1, 4096), (13, 1500),
                  (8, 1024), (32, 512), (4, 8192), (2, 3000), (24, 777), (64, 256)]
+
+# Shape profiles: which workload the tasks represent. "datacenter" is serving and
+# training on NVIDIA GPUs; "mac" is local inference on Apple GPUs (single user, small
+# batches, long contexts, shorter prompts).
+SHAPE_PROFILES = {
+    "datacenter": {"prefill": PREFILL_SHAPES, "decode": DECODE_SHAPES},
+    "mac": {
+        "prefill": [(1, 1024), (2, 777), (1, 256),
+                    (1, 512), (1, 2048), (1, 1500), (4, 128)],
+        "decode": [(1, 2048), (4, 1024), (2, 777),
+                   (1, 8192), (1, 4096), (2, 3000), (4, 257), (1, 511)],
+    },
+}
 PHASES = ("prefill", "decode")
 
 # Integer/bool inputs (masks, positions, indices) are always stored exactly: replacing
@@ -244,7 +257,8 @@ def build_model(model_id: str):
         model = AutoModelForCausalLM.from_config(cfg, dtype=torch.bfloat16, attn_implementation="sdpa")
     except TypeError:
         model = AutoModelForCausalLM.from_config(cfg, torch_dtype=torch.bfloat16, attn_implementation="sdpa")
-    return model.cuda().eval(), n
+    from hotloop.harness.device import get_device
+    return model.to(get_device().torch_device).eval(), n
 
 
 def _capture(model, run) -> list:
@@ -269,7 +283,7 @@ def trace_shape(model, n_layers: int, phase: str, batch: int, n: int, vocab: int
     """Returns {struct_key: task_shape_record} for one phase and shape."""
     meta_base = shape_meta(phase, batch, n)
     if phase == "prefill":
-        ids = torch.randint(0, vocab, (batch, n), device="cuda")
+        ids = torch.randint(0, vocab, (batch, n), device=model.device)
         captured = _capture(model, lambda m: m(input_ids=ids, use_cache=False))
     else:
         from transformers import StaticCache
@@ -277,8 +291,9 @@ def trace_shape(model, n_layers: int, phase: str, batch: int, n: int, vocab: int
         cache = StaticCache(config=model.config, max_cache_len=n + 1)
         base = getattr(model, model.base_model_prefix)
         with torch.no_grad():  # fill the cache with a real prompt (base model only: no big logits)
-            base(input_ids=torch.randint(0, vocab, (batch, n), device="cuda"), past_key_values=cache, use_cache=True)
-        ids = torch.randint(0, vocab, (batch, 1), device="cuda")
+            base(input_ids=torch.randint(0, vocab, (batch, n), device=model.device), past_key_values=cache,
+                 use_cache=True)
+        ids = torch.randint(0, vocab, (batch, 1), device=model.device)
         captured = _capture(model, lambda m: m(input_ids=ids, past_key_values=cache, use_cache=True))
     return _extract(captured, model, n_layers, model_id, meta_base)
 
@@ -400,7 +415,7 @@ def slug(model_id: str) -> str:
     return re.sub(r"[^a-z0-9.]+", "-", model_id.split("/")[-1].lower()).strip("-")
 
 
-def trace_model(model_id: str, phases=PHASES) -> dict:
+def trace_model(model_id: str, phases=PHASES, profile: str = "datacenter") -> dict:
     """Returns {task_id: {"task": task_json, "shapes": {sid: record}}} for every phase."""
     model, n_layers = build_model(model_id)
     text_cfg = model.config.get_text_config() if hasattr(model.config, "get_text_config") else model.config
@@ -408,7 +423,7 @@ def trace_model(model_id: str, phases=PHASES) -> dict:
     max_pos = getattr(text_cfg, "max_position_embeddings", None) or 1 << 30
     tasks = {}
     for phase in phases:
-        grid = PREFILL_SHAPES if phase == "prefill" else DECODE_SHAPES
+        grid = SHAPE_PROFILES[profile][phase]
         grid = [(b, n) for b, n in grid if n + (phase == "decode") <= max_pos]  # e.g. GPT-2 has 1024 positions
         by_key: dict = {}
         for batch, n in grid:
@@ -423,7 +438,8 @@ def trace_model(model_id: str, phases=PHASES) -> dict:
                 res = {}
             for key, r in res.items():
                 by_key.setdefault(key, {})[sid] = r
-            torch.cuda.empty_cache()
+            from hotloop.harness.device import get_device
+            get_device().empty_cache()
         if not grid:
             continue
         order = [shape_meta(phase, *g)["shape_id"] for g in grid]
@@ -436,13 +452,15 @@ def trace_model(model_id: str, phases=PHASES) -> dict:
             pattern = path_pattern(first["path"])
             name = pattern.replace(".*", "").replace("model.", "", 1)
             task_id = f"{slug(model_id)}__{name}" if phase == "prefill" else f"{slug(model_id)}__decode__{name}"
+            if profile != "datacenter":
+                task_id = f"{profile}__{task_id}"
             if task_id in tasks:
                 task_id += f"-{skey[:6]}"
             tasks[task_id] = {
                 "task": {
                     "task_id": task_id, "model_id": model_id, "module_path": first["path"],
                     "module_class": first["module_class"], "pattern": pattern, "struct_key": skey,
-                    "phase": phase, "public_shapes": public, "hidden_shapes": hidden,
+                    "phase": phase, "profile": profile, "public_shapes": public, "hidden_shapes": hidden,
                 },
                 "shapes": recs,
             }

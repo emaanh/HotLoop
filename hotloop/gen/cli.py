@@ -20,9 +20,10 @@ def select(n: int) -> list[dict]:
     return select_models(n)
 
 
-def trace(store: Store, model_id: str, phases: tuple[str, ...] = ("prefill", "decode")) -> dict:
+def trace(store: Store, model_id: str, phases: tuple[str, ...] = ("prefill", "decode"),
+          profile: str = "datacenter") -> dict:
     from hotloop.gen.trace import trace_model, write_task
-    tasks = trace_model(model_id, phases=tuple(phases))
+    tasks = trace_model(model_id, phases=tuple(phases), profile=profile)
     for t in tasks.values():
         write_task(t, store.tasks, store.hidden)
     return {tid: {"class": t["task"]["module_class"], "shapes": list(t["shapes"])} for tid, t in tasks.items()}
@@ -95,6 +96,7 @@ def main():
     p = sub.add_parser("trace")
     p.add_argument("model_ids", nargs="+")
     p.add_argument("--phases", default="prefill,decode")
+    p.add_argument("--profile", default="datacenter", help="shape profile: datacenter | mac")
     sub.add_parser("filter").add_argument("--tasks", default="")
     sub.add_parser("filter-one").add_argument("task_id")
     sub.add_parser("annotate")
@@ -103,7 +105,7 @@ def main():
     if args.cmd == "select":
         out = select(args.n)
     elif args.cmd == "trace":
-        out = {m: trace(store, m, tuple(args.phases.split(","))) for m in args.model_ids}
+        out = {m: trace(store, m, tuple(args.phases.split(",")), args.profile) for m in args.model_ids}
     elif args.cmd == "filter":
         out = filter_tasks(store, args.tasks.split(",") if args.tasks else None)
     elif args.cmd == "filter-one":

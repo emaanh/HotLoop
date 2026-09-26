@@ -52,7 +52,10 @@ class FlopCounter(TorchDispatchMode):
         kwargs = kwargs or {}
         out = func(*args, **kwargs)
         name = func.overloadpacket.__name__
-        if func in (aten.mm.default, aten.addmm.default):
+        if func is aten.linear.default:  # some backends (e.g. MPS) run linear as one op
+            x, w = args[0], args[1]
+            self.flops += 2 * (x.numel() // x.shape[-1]) * w.shape[0] * w.shape[1]
+        elif func in (aten.mm.default, aten.addmm.default):
             a, b = (args[1], args[2]) if func is aten.addmm.default else (args[0], args[1])
             self.flops += 2 * a.shape[0] * a.shape[1] * b.shape[1]
         elif func in (aten.bmm.default, aten.baddbmm.default):

@@ -13,6 +13,20 @@ from hotloop.harness import numerics, roofline
 from hotloop.harness.inputs import make_inputs
 
 MIN_BASELINE_MS = 0.015
+OVERHEAD_FACTOR = 3.0   # baseline must exceed this multiple of the device's timing floor
+_floor_ms = None
+
+
+def timing_floor_ms() -> float:
+    """Time of a trivial operation through the scoring timing path: the per-call overhead
+    (tiny on CUDA-graph replay, ~0.2 ms for eager launch+sync on Apple GPUs). Tasks whose
+    baseline is near this floor measure launch overhead, not kernel work."""
+    global _floor_ms
+    if _floor_ms is None:
+        from hotloop.harness.device import get_device
+        x = torch.zeros(1, device=get_device().torch_device)
+        _floor_ms = graph_time_ms(lambda t: t.add_(0), [x], iters=30)
+    return _floor_ms
 MAX_BASELINE_SOL_FRAC = 0.75
 SENSITIVITY = 1e-3
 
@@ -21,9 +35,9 @@ def _rel_diff(a: list, b: list) -> float:
     worst = 0.0
     for x, y in zip(a, b):
         if not x.is_floating_point():
-            worst = max(worst, float(not torch.equal(x, y)))
+            worst = max(worst, float(not torch.equal(x.cpu(), y.cpu())))
             continue
-        x, y = x.double(), y.double()
+        x, y = x.cpu().double(), y.cpu().double()  # CPU: Apple GPUs have no fp64
         worst = max(worst, ((x - y).norm() / x.norm().clamp_min(1e-30)).item())
     return worst
 
@@ -68,7 +82,7 @@ def filter_shape(shape, peaks: dict) -> dict:
     stats = {}
     stats["activation_sensitivity"] = _rel_diff(out, run(_resample(meta, exact, inputs, 2, "activation"))) if "activation" in kinds else None
     stats["param_sensitivity"] = _rel_diff(out, run(_resample(meta, exact, inputs, 3, "param"))) if "param" in kinds else None
-    floats = [o.double() for o in out if o.is_floating_point()]
+    floats = [o.cpu().double() for o in out if o.is_floating_point()]
     stats["output_spread"] = min((o.std() / o.abs().mean().clamp_min(1e-30)).item() for o in floats) if floats else 0.0
     stats["eager_ms"] = graph_time_ms(ref, inputs)
     try:
@@ -88,8 +102,11 @@ def filter_shape(shape, peaks: dict) -> dict:
             reasons.append(f"output ignores its {k.split('_')[0]}s")
     if stats["output_spread"] < SENSITIVITY:
         reasons.append("output is near-constant")
-    if base < MIN_BASELINE_MS:
-        reasons.append(f"too small to time (baseline {base * 1e3:.1f}us)")
+    stats["timing_floor_ms"] = timing_floor_ms()
+    min_ms = max(MIN_BASELINE_MS, OVERHEAD_FACTOR * stats["timing_floor_ms"])
+    if base < min_ms:
+        reasons.append(f"too small to time (baseline {base * 1e3:.1f}us, device overhead "
+                       f"{stats['timing_floor_ms'] * 1e3:.1f}us)")
     if stats["baseline_sol_frac"] > MAX_BASELINE_SOL_FRAC:
         reasons.append(f"no headroom (baseline at {100 * stats['baseline_sol_frac']:.0f}% of speed-of-light)")
     stats["keep"] = not reasons
